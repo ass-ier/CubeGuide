@@ -10,6 +10,17 @@ export const FACE_NEIGHBORS: Record<Face, { top: Face; right: Face; bottom: Face
   D: { top: 'F', right: 'R', bottom: 'B', left: 'L' },
 };
 
+export function photoOrientationInstruction(face: Face): string {
+  switch (face) {
+    case 'F': return 'Pick any front face. Keep the same neighboring face on top for all four side photos.';
+    case 'R': return 'From Front, turn the whole cube left to show its right face. Keep your original top up.';
+    case 'B': return 'From Front, turn the whole cube halfway around. Keep your original top up; do not mirror the photo.';
+    case 'L': return 'From Front, turn the whole cube right to show its left face. Keep your original top up.';
+    case 'U': return 'Return to Front, then tip the top toward you. Front must be beyond the bottom edge of this photo.';
+    case 'D': return 'Return to Front, then tip the bottom toward you. Front must be beyond the top edge of this photo.';
+  }
+}
+
 export function orientationInstruction(face: Face, scheme: ColorScheme): string {
   const color = (f: Face) => COLOR_INFO[scheme[f]].name.toLowerCase();
   const home = `Start with ${color('U')} on top and ${color('F')} facing you.`;

@@ -9,9 +9,11 @@ export interface Prediction {
   readonly sample: RGB;
   readonly reason: string | null;
 }
-export interface PhotoAnalysis {
+export interface PhotoSamples {
   readonly predictions: readonly Prediction[];
   readonly warnings: readonly string[];
+}
+export interface PhotoAnalysis extends PhotoSamples {
   readonly expectedCenter: Color;
   readonly centerNeedsConfirmation: boolean;
 }
@@ -40,15 +42,13 @@ const REFERENCES = COLORS.map((color) => {
   return { color, rgb };
 });
 
-export function classifyColor(sample: RGB, calibration: Calibration = {}): Prediction {
+function matchColor(sample: RGB, references: readonly { color: Color; samples: readonly RGB[] }[]): Prediction {
   if (sample.some((value) => !Number.isFinite(value) || value < 0 || value > 255)) throw new Error('Photo samples must contain valid RGB values.');
   const peak = Math.max(...sample);
   if (peak < 48) return { color: null, sample, confidence: 0, reason: 'Too dark to identify. Retake in even light or choose this color manually.' };
   const value = lab(normalized(sample));
-  const distances = REFERENCES.map(({ color, rgb }) => {
-    const references: RGB[] = [rgb];
-    if (calibration[color]) references.push(calibration[color]);
-    const distance = Math.min(...references.map((reference) => {
+  const distances = references.map(({ color, samples }) => {
+    const distance = Math.min(...samples.map((reference) => {
       const expected = lab(normalized(reference));
       return Math.sqrt(0.18 * (value[0] - expected[0]) ** 2 + (value[1] - expected[1]) ** 2 + (value[2] - expected[2]) ** 2);
     }));
@@ -64,12 +64,33 @@ export function classifyColor(sample: RGB, calibration: Calibration = {}): Predi
   };
 }
 
+export function classifyColor(sample: RGB, calibration: Calibration = {}): Prediction {
+  return matchColor(sample, REFERENCES.map(({ color, rgb }) => {
+    const samples: RGB[] = [rgb];
+    if (calibration[color]) samples.push(calibration[color]);
+    return { color, samples };
+  }));
+}
+
+export function classifyWithCenters(sample: RGB, calibration: Calibration): Prediction {
+  return matchColor(sample, COLORS.map((color) => {
+    const center = calibration[color];
+    if (!center) throw new Error('All six distinct center samples are needed before matching sticker colors.');
+    return { color, samples: [center] };
+  }));
+}
+
+export function colorDistance(a: RGB, b: RGB): number {
+  const first = lab(normalized(a)), second = lab(normalized(b));
+  return Math.sqrt(0.18 * (first[0] - second[0]) ** 2 + (first[1] - second[1]) ** 2 + (first[2] - second[2]) ** 2);
+}
+
 function median(values: number[]): number {
   values.sort((a, b) => a - b);
   return values[Math.floor(values.length / 2)];
 }
 
-export function analyzePhoto(image: Pixels, quad: Quad, expectedCenter: Color, calibration: Calibration = {}): PhotoAnalysis {
+export function samplePhoto(image: Pixels, quad: Quad, calibration: Calibration = {}): PhotoSamples {
   if (!Number.isInteger(image.width) || !Number.isInteger(image.height) || image.width < 32 || image.height < 32
     || image.width > 1024 || image.height > 1024 || image.data.length !== image.width * image.height * 4) {
     throw new Error('The analysis image must be a decoded 32-1024 pixel raster with complete RGBA data.');
@@ -113,8 +134,14 @@ export function analyzePhoto(image: Pixels, quad: Quad, expectedCenter: Color, c
   }
   if (predictions.some((p) => p.color === null)) warnings.push('Some colors could not be identified. Choose each missing color or retake the photo.');
   if (predictions.some((p) => p.reason)) warnings.push('Flagged samples need careful review. Even unflagged estimates can be wrong under different lighting.');
+  return Object.freeze({ predictions: Object.freeze(predictions), warnings: Object.freeze(warnings) });
+}
+
+export function analyzePhoto(image: Pixels, quad: Quad, expectedCenter: Color, calibration: Calibration = {}): PhotoAnalysis {
+  const { predictions, warnings } = samplePhoto(image, quad, calibration);
   const center = predictions[4];
-  const centerNeedsConfirmation = center.color !== expectedCenter || center.confidence < 0.45 || center.reason !== null || uniform && warnings.length > 0;
+  const centerNeedsConfirmation = center.color !== expectedCenter || center.confidence < 0.45 || center.reason !== null
+    || warnings.some((warning) => warning.startsWith('No clear sticker borders'));
   return Object.freeze({ predictions: Object.freeze(predictions), warnings: Object.freeze(warnings), expectedCenter, centerNeedsConfirmation });
 }
 

@@ -1,6 +1,6 @@
 ---
 name: CubeGuide
-description: A daylight workbench for learning one physical cube turn at a time.
+description: Minimal automatic photo entry, followed by a daylight cube-solving workbench.
 colors:
   primary: "#3552ba"
   primary-hover: "#29439d"
@@ -30,6 +30,24 @@ typography:
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.6
+  intro:
+    fontSize: "1rem"
+  panel-heading:
+    fontSize: "1.4rem"
+  compact-heading:
+    fontSize: "1.125rem"
+  mobile-heading:
+    fontSize: "1.75rem"
+  narrow-heading:
+    fontSize: "1.55rem"
+  supporting:
+    fontSize: "0.9375rem"
+  label:
+    fontSize: "0.8125rem"
+  caption:
+    fontSize: "0.75rem"
+  compact-caption:
+    fontSize: "0.6875rem"
   notation:
     fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace'
     fontSize: "5rem"
@@ -66,10 +84,11 @@ components:
 
 ## Overview
 
-The built direction is a **daylight workbench**: the cube is the object of
-attention, and the interface stays readable beside a physical puzzle on a
-desk. Expression comes from the real six-color cube, generous working space,
-and confident blue controls rather than decorative dashboard elements.
+The built direction remains a **daylight workbench**. Before a cube is read,
+the interface recedes to one upload action, six small face slots, a holding
+guide, and generous space. Afterward, the actual cube becomes the object of
+attention. Slate text and confident blue controls preserve the incumbent
+identity; there is no decorative marketing page or dashboard.
 
 This record describes the implemented interface. Product scope and
 requirements live in `PRODUCT.md`; screen-specific strategy lives in the
@@ -104,7 +123,13 @@ selects use 1rem to remain legible without focus zoom.
 
 ## Layout
 
-The page is capped at 1344px, with 40px desktop side padding. A 1.35:1 workspace
+Automatic entry uses a 660px content width inside an 820px shell. The heading
+and upload action lead, followed by compact thumbnails, collapsed photo tips,
+and secondary manual/practice links. The six photo slots are one row on
+desktop and two rows of three below 560px. Face names, center names, missing
+photos, progress, and retake state do not rely on color alone.
+
+The solution/manual page is capped at 1344px, with 40px desktop side padding. A 1.35:1 workspace
 places the cube on the left and the current task on the right. The cube column
 sticks within the workspace while a long face-entry form is completed.
 
@@ -117,6 +142,12 @@ Footer space prevents the dock from covering the page's final content.
 Six face editors normally use two columns. Under 359px they become one
 column to retain practical sticker targets. Orientation text and native
 form fields wrap rather than causing horizontal scrolling.
+
+The default screen has no example cube, center selects, manual sticker grid,
+metrics, or mode toggle. The main photo action opens capture/upload directly.
+The smaller camera option uses the native device hint; it is not a second
+primary action. The viewport is lazy-loaded only when a real cube or the
+explicit manual/practice route needs it.
 
 ## Elevation & Depth
 
@@ -146,22 +177,21 @@ The prominent move, face name/color, physical direction arrow, and actual 3D
 layer must agree. An unfinished half-turn rewind is a special physical
 direction case; notation alone cannot describe its arrow direction.
 
-Photo entry extends the same workbench rather than opening a separate
-dashboard. Six face progress buttons, the configured center, and neighboring
-edge colors precede the image. Four numbered crop handles and a projected
-3x3 grid make the sampled region explicit. Handle targets become 44px on
-phones; dragging a handle does not scroll, while swiping the image can.
-The nine-cell review uses named native color selects and clear uncertainty
-text. Amber is a semantic request to review, not a confidence percentage.
-Center disagreements receive the existing red error treatment. No predictions
-are presented as confirmed input until the explicit review action.
+Automatic capture uses compact, actual face thumbnails and detected center
+names. Focus advances to the next upload action, moves to an actionable error
+when needed, and reaches the verified solution without starting playback.
+Busy processing is cancellable. Failed/cancelled replacement preserves the
+prior thumbnail; destructive resets and source changes remain confirmed.
 
-The bounded photo visual pass retained the accepted layout and palette. Its
-fixes enlarged small estimate labels and touch handles, restored image-area
-scrolling, and reused the existing blue notice colors. Design-hook reports on
-the inherited compact type steps and semantic sticker/status colors are
-contextually intentional, not grounds for redesigning the accepted baseline.
-No hook warnings were suppressed.
+The secondary alignment editor keeps its four numbered handles, perspective
+grid, named color corrections, and required review. Its targets become 44px
+on phones. Amber is a request to inspect an estimate, not an accuracy score.
+This editor is an escape hatch, never compulsory for clear automatic photos.
+
+Inherited native fonts, fixed compact type steps, and semantic sticker/status
+colors are contextually intentional. The new screen uses the same documented
+2rem/1.75rem/1.55rem heading steps and slate/blue palette. These hook findings
+do not justify a redesign or advisory suppression; no warnings are suppressed.
 
 ## Do's and Don'ts
 
@@ -171,5 +201,5 @@ No hook warnings were suppressed.
 - Do use reduced motion for exact timed snapshots instead of rotation.
 - Don't label a verified move sequence as an already solved current cube.
 - Don't imply the two-phase solution is optimal.
-- Don't add accounts, unverified automatic scanning claims, fabricated proof, or
+- Don't add accounts, unsupported camera-accuracy claims, fabricated proof, or
   decorative metrics to this task-focused workbench.

@@ -1,6 +1,7 @@
 @import url('./styles/input.css');
 @import url('./styles/solution.css');
 @import url('./styles/photo.css');
+@import url('./styles/automatic.css');
 
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-27T20:22:05Z",
+  "generatedAt": "2026-09-27T21:13:03Z",
   "title": "Design System: CubeGuide",
   "extensions": {
     "shadows": [
@@ -18,6 +18,7 @@
       { "name": "wide-cube", "value": "1450px" },
       { "name": "compact-desktop", "value": "1050px" },
       { "name": "stacked-workspace", "value": "800px" },
+      { "name": "photo-slots", "value": "560px" },
       { "name": "phone", "value": "520px" },
       { "name": "single-face-column", "value": "359px" }
     ]
@@ -34,9 +35,9 @@
   ],
   "narrative": {
     "northStar": "Daylight workbench",
-    "overview": "The real puzzle leads; manual or reviewed local photo entry, a clear reference frame, and readable per-move teaching support it.",
-    "keyCharacteristics": ["Large real 3D cube", "Explicit physical orientation", "Named colors and symbols", "Reviewed six-face photo assistance", "Predictable playback"],
-    "dos": ["Keep the cube and current action usable together on phones.", "Distinguish solution verification from the current solved state.", "Require alignment and explicit color review before committing each photo face."],
-    "donts": ["Do not change the logical reference frame when moving the camera.", "Do not present color estimates as confirmed input or promise automatic unseen-face scanning."]
+    "overview": "One upload action and six compact face slots lead to a real, automatically read cube. The established daylight workbench appears for verified solving and playback.",
+    "keyCharacteristics": ["Minimal photo-first entry", "Pixel-derived centers", "Explicit physical orientation", "Named colors and symbols", "Optional manual/alignment tools", "Predictable real 3D playback"],
+    "dos": ["Keep the upload action visible on the first phone screen.", "Accept clear six-photo input without setup forms, crop handles, review boxes, or an extra solve click.", "Reject uncertain and ambiguous reconstructions.", "Keep the cube and playback controls usable together.", "Distinguish verified solutions from actually solved current states."],
+    "donts": ["Do not change the reference frame when moving the camera.", "Do not mount an example cube or expose manual forms before they are relevant.", "Do not force a convenient color assignment or invent unseen stickers.", "Do not claim universal camera or lighting accuracy."]
   }
 }

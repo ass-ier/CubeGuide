@@ -10,13 +10,18 @@ interface Props {
   state: PlaybackState;
   scheme: ColorScheme;
   advanced: boolean;
+  focusOnReady?: boolean;
   onAction(action: PlaybackAction): void;
   onViewFace(face: Face): void;
   onEdit(): void;
 }
 
-export function SolutionPanel({ state, scheme, advanced, onAction, onViewFace, onEdit }: Props) {
+export function SolutionPanel({ state, scheme, advanced, focusOnReady = false, onAction, onViewFace, onEdit }: Props) {
   const solution = state.solution;
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (solution && focusOnReady) heading.current?.focus();
+  }, [solution, focusOnReady]);
   if (!solution) return null;
   const cue = turnCue(state);
   const move = cue?.move;
@@ -34,7 +39,7 @@ export function SolutionPanel({ state, scheme, advanced, onAction, onViewFace, o
         <Icon name={solved || !hasStarted ? 'check' : paused ? 'pause' : 'play'} size={17} />
         <span>{phase}</span>
       </div>
-      <h2>{solved ? 'Back to six happy faces.' : advanced ? 'Your move sequence.' : 'One turn at a time.'}</h2>
+      <h2 ref={heading} tabIndex={-1}>{solved ? 'Back to six happy faces.' : advanced ? 'Your move sequence.' : 'One turn at a time.'}</h2>
       {solved ? <p>{solution.moves.length === 0 ? 'Your entered cube is already solved. No moves needed.' : 'Every face is complete. Your current cube matches the verified solved state.'}</p>
         : <p>{advanced ? 'Step through the notation, or play the full sequence.' : 'Keep your physical cube nearby. You can pause for as long as you need.'}</p>}
 
@@ -153,3 +158,4 @@ export function SolutionTimeline({ state, onAction }: { state: PlaybackState; on
     </section>
   );
 }
+import { useEffect, useRef } from 'react';

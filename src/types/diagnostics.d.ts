@@ -3,7 +3,7 @@ import type { StickerInput } from '../cube/types';
 
 export interface CubeGuideInspection {
   readonly app: 'CubeGuide';
-  readonly source: 'entry' | 'practice';
+  readonly source: 'photo' | 'entry' | 'practice';
   readonly cubeFacelets: string;
   readonly initialFacelets: string;
   readonly solved: boolean;

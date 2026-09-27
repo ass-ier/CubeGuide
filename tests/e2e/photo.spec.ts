@@ -51,7 +51,7 @@ async function generatedPhoto(page: Page, colors: readonly Color[], options: { r
 async function startPhotos(page: Page) {
   for (const face of FACES) await page.getByLabel(`${FACE_NAMES[face]} center color`).selectOption(PRACTICE_SCHEME[face]);
   await page.getByRole('button', { name: 'Lock centers & enter stickers' }).click();
-  await page.getByRole('button', { name: 'Take/upload face photos', exact: true }).click();
+  await page.getByRole('button', { name: 'Align/review a face photo', exact: true }).click();
 }
 
 async function alignPhoto(page: Page) {
@@ -116,6 +116,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await expect(page).toHaveTitle("CubeGuide — Rubik's Cube Solver");
+  await page.getByRole('button', { name: 'Enter colors manually', exact: true }).click();
   await page.waitForFunction(() => !!window.__cubeGuide?.inspect().visual);
 });
 
@@ -124,53 +125,12 @@ test.afterEach(async ({ page }, testInfo) => {
   errors.delete(page);
 });
 
-for (const device of [
-  { name: 'desktop', viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false },
-  { name: 'phone', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
-]) {
-  test.describe(`photo-first landing on ${device.name}`, () => {
-    test.use({ viewport: device.viewport, isMobile: device.isMobile, hasTouch: device.hasTouch });
-    test('shows photos above the fold and continues directly from required centers into real upload', async ({ page }) => {
-      const action = page.getByTestId('landing-photo-action');
-      await expect(page.getByRole('button', { name: 'Take/upload face photos', exact: true })).toHaveCount(1);
-      await expect(action).toBeInViewport({ ratio: 1 });
-      expect(await page.evaluate(() => window.scrollY)).toBe(0);
-      await action.focus();
-      await page.keyboard.press('Enter');
-      await expect(page.locator('#center-title')).toBeFocused();
-      await expect(page.locator('.photo-setup-note')).toContainText('open automatically');
-      await expect(action).toHaveAttribute('aria-expanded', 'true');
-      await expect(page.getByRole('button', { name: 'Lock centers & open photos', exact: true })).toBeDisabled();
-      expect((await page.evaluate(() => window.__cubeGuide.inspect().entry)).every((color) => color === null)).toBe(true);
-      for (const face of FACES) await page.getByLabel(`${FACE_NAMES[face]} center color`).selectOption(PRACTICE_SCHEME[face]);
-      await page.getByRole('button', { name: 'Lock centers & open photos', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Photo-assisted entry', exact: true })).toBeFocused();
-      await expect(page.getByRole('button', { name: 'Take a photo', exact: true })).toBeInViewport({ ratio: 1 });
-      await expect(page.getByRole('button', { name: 'Upload photo', exact: true })).toBeInViewport({ ratio: 1 });
-      await expect(page.getByTestId('photo-camera')).toHaveAttribute('capture', 'environment');
-      const colors = Array<Color>(9).fill('green');
-      await page.getByTestId('photo-upload').setInputFiles(await generatedPhoto(page, colors));
-      await expect(page.getByTestId('photo-preview')).toBeVisible();
-      await detectPhoto(page, 'F');
-      await assertPredictions(page, 'F', colors);
-      await acceptPhoto(page, 'F');
-      expect((await page.evaluate(() => window.__cubeGuide.inspect().entry)).slice(18, 27)).toEqual(colors);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    });
-  });
-}
-
-test('photo intent, repeat clicks, manual fallback and new cube preserve only the intended state', async ({ page }) => {
-  const action = page.getByTestId('landing-photo-action');
-  await action.click();
+test('secondary photo tools preserve drafts, repeat clicks, focus and manual input', async ({ page }) => {
   await page.getByLabel('Up center color').selectOption('white');
-  await action.click();
   await expect(page.getByLabel('Up center color')).toHaveValue('white');
-  await page.getByRole('button', { name: 'Use manual entry instead', exact: true }).click();
-  await expect(page.locator('#center-title')).toBeFocused();
-  await expect(action).toHaveAttribute('aria-expanded', 'false');
   for (const face of FACES) await page.getByLabel(`${FACE_NAMES[face]} center color`).selectOption(PRACTICE_SCHEME[face]);
   await page.getByRole('button', { name: 'Lock centers & enter stickers', exact: true }).click();
+  const action = page.getByRole('button', { name: 'Align/review a face photo', exact: true });
   await expect(page.getByTestId('photo-input')).toHaveCount(0);
   await page.getByRole('button', { name: 'Paint red stickers', exact: true }).click();
   await page.getByTestId('sticker-F-0').click();
@@ -202,7 +162,9 @@ test('photo intent, repeat clicks, manual fallback and new cube preserve only th
   expect(await page.evaluate(() => window.__cubeGuide.inspect().entry)).toEqual(entered);
   await page.getByRole('button', { name: 'New cube', exact: true }).click();
   await page.getByRole('button', { name: 'Start new cube', exact: true }).click();
-  await expect(action).toHaveAttribute('aria-expanded', 'false');
+  await expect(action).toHaveCount(0);
+  await expect(page.getByTestId('landing-photo-action')).toBeVisible();
+  await page.getByRole('button', { name: 'Enter colors manually', exact: true }).click();
   for (const face of FACES) await page.getByLabel(`${FACE_NAMES[face]} center color`).selectOption(PRACTICE_SCHEME[face]);
   await page.getByRole('button', { name: 'Lock centers & enter stickers', exact: true }).click();
   await expect(page.getByTestId('photo-input')).toHaveCount(0);
@@ -255,7 +217,7 @@ test('six real raster uploads -> four-corner alignment -> reviewed colors -> rea
   await page.getByRole('dialog').getByRole('button', { name: 'Edit colors', exact: true }).click();
   await expect(page.getByTestId('photo-input')).toHaveCount(0);
   expect(await page.evaluate(() => window.__cubeGuide.inspect().entry)).toEqual(colors);
-  await page.getByTestId('landing-photo-action').click();
+  await page.getByRole('button', { name: 'Align/review a face photo', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Photo-assisted entry', exact: true })).toBeFocused();
   expect(await page.evaluate(() => window.__cubeGuide.inspect().entry)).toEqual(colors);
 });
@@ -339,7 +301,7 @@ test('corrupt, unsupported, blank and stale photo loads never change cube input 
   await page.getByRole('button', { name: 'Close photo entry', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Close photo entry', exact: true }).click();
   expect(await page.locator('html').getAttribute('data-photo-object-urls')).toBe('0');
-  await page.getByRole('button', { name: 'Take/upload face photos', exact: true }).click();
+  await page.getByRole('button', { name: 'Align/review a face photo', exact: true }).click();
   await page.evaluate(() => {
     const original = File.prototype.arrayBuffer;
     File.prototype.arrayBuffer = async function () {

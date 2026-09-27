@@ -1,13 +1,32 @@
 # CubeGuide
 
 A complete, local-first 3x3 Rubik's Cube solver and step-by-step teaching tool.
-Enter the six faces of a physical cube manually or with locally analyzed face
-photos, validate its pieces, and follow a real, verified solution on an
-interactive 27-cubelet model.
+Take or upload six labeled face photos. The app locates the sticker grids,
+reads the center colors, validates the cube, and finds a real solution
+automatically. Then follow the moves on an interactive 27-cubelet model.
+Manual entry, photo alignment tools, and practice scrambles remain available.
+
+![CubeGuide's minimal first screen: one prominent photo action, a Front-face orientation guide, six compact photo slots, and secondary manual/practice options. No center form or example 3D cube is shown.](docs/images/landing.jpg)
+
+The screenshots in this guide show the actual application using generated
+cube states and a synthetic sticker image. They contain no personal photos
+and are not evidence of camera-hardware or uncontrolled-lighting accuracy.
+
+**Quick links:** [First use](#solve-your-physical-cube) ·
+[Photo input](#take-or-upload-six-face-photos) ·
+[Architecture](#architecture-and-why-it-is-built-this-way) ·
+[Tests](#tests) · [Dependencies](#dependencies-and-audit-decisions) ·
+[Hosting](#static-hosting-and-vercel-readiness)
 
 ## Run locally
 
-Use Node.js 20.19 or newer (Node 20.19.2 and npm 11.4.2 were used for development).
+Use Node.js **20.19+ within 20.x**, **22.12+ within 22.x**, or **24+**, as
+specified in `package.json`. A currently supported Node LTS release is
+recommended for hosting; Node 20.19.2 remains compatible with this project.
+Use npm with lockfile-v3 and `overrides` support. Development and the
+dependency cleanup were exercised with Node 20.19.2 and npm 11.4.2.
+
+From the project directory:
 
 ```sh
 npm ci
@@ -27,31 +46,85 @@ npm run preview
 
 The production preview is **http://127.0.0.1:4187/**. Serve `dist/` over HTTP;
 opening `index.html` directly with `file://` does not support the module worker.
-There is no backend, account, API key, or remote deployment. Photo processing
-and solving stay in your browser; the native photo picker is optional.
+No backend, app account, or API key is required. Photo processing and solving
+stay in your browser. Use manual entry if you do not want to use photos.
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm ci` | Install the exact committed dependency tree, without rewriting the lockfile. |
+| `npm run dev` | Start Vite on strict loopback port 5187. |
+| `npm run typecheck` | Check application, configuration, and test TypeScript projects. |
+| `npm test` | Run all unit, property-style, solver, photo-analysis, and reducer tests. |
+| `npm run test:watch` | Run Vitest in watch mode during development. |
+| `npm run test:e2e` | Run real Chromium UI, worker, rendering, and input scenarios. |
+| `npm run build` | Typecheck and create production assets in `dist/`. |
+| `npm run preview` | Serve the production build locally on strict loopback port 4187. |
+| `npm audit` | Check the installed dependency tree against the current advisory feed. |
+
+### If port 5187 is already in use
+
+This is a server-startup conflict, **not evidence that `npm ci` failed**.
+An earlier CubeGuide preview may still be running. First open
+<http://127.0.0.1:5187/> and check that it really is CubeGuide.
+
+On macOS/Linux, these are read-only checks:
+
+```sh
+curl -fsS http://127.0.0.1:5187/ | grep '<title>'
+lsof -nP -iTCP:5187 -sTCP:LISTEN
+```
+
+If it is the preview you want, reuse it. To restart an instance you own, stop
+it with Ctrl+C in its original terminal, then run `npm run dev` again.
+Do not kill unrelated Node processes. If another application owns the port,
+leave it alone and explicitly choose a different one:
+
+```sh
+npm exec -- vite --host 127.0.0.1 --port 5188 --strictPort
+```
+
+Tests can target that instance with `CUBE_GUIDE_BASE_URL=http://127.0.0.1:5188`.
+The loopback address is local to the machine running the server; a phone on
+the same Wi-Fi cannot reach a laptop's `127.0.0.1`. Mobile emulation and a
+deployed HTTPS site are different from exposing a local development server.
 
 ## Solve your physical cube
 
-1. Choose a face to be **Front** and an adjacent face to be **Up**. Select all
-   six center colors. Nothing assumes that white must be Up or green Front.
-2. Lock the centers. Select a named paint color, then click or tap the other
-   48 stickers in the six face grids. `?` and a striped background mean empty,
-   not white. Every sticker also has a color letter. Alternatively, choose
-   **Take/upload face photos** and follow the reviewed-photo flow below.
-3. Use each face heading for its holding instructions. The labels above and
-   below each grid identify the neighboring **top** and **right** center.
-   Always look straight at the face; do not mirror a back-face entry.
-4. Select **Check colors & solve**. Incomplete or impossible input receives
-   specific diagnostics. No move sequence is accepted until replay solves
-   the exact entered state.
-5. **Solution ready** means the moves have been verified; your current cube
-   is still scrambled. Press **Play solution**, or follow one **Next** move
-   at a time. **Cube solved** only appears when the current committed cube
-   really is solved and no turn is in flight.
+1. Hold any face toward you as **Front**, with a neighboring face as your
+   original **Up**. This is a holding convention, not a color-selection form.
+   Nothing assumes white Up or green Front.
+2. Select **Take or upload a photo**, visible without scrolling on desktop
+   and phones. Add the Front photo, then Right, Back, Left, Up, and Down.
+   The next face and its top-edge guide advance automatically. Turn the
+   whole cube between photos, never an individual layer.
+3. For a clear photo, the app finds the nine-sticker grid itself. It reads
+   the actual center from the pixels; you do not select centers, drag crop
+   handles, rotate a grid, or tick review boxes. A bad or ambiguous image
+   receives a specific retake message instead of a guessed result.
+4. Once all six photos agree, color matching, full physical validation,
+   solving, and independent solution verification run automatically.
+   The 3D workspace appears for that actual cube, not an example.
+5. **Solution ready** means the moves have been verified; the current cube
+   is still scrambled. Playback is deliberately **not automatic**. Press
+   **Play solution**, or follow one **Next** move at a time. **Cube solved**
+   only appears when the current committed cube really is solved and no
+   turn is in flight.
 
-The initial 3D view is an explicitly labeled orientation reference, not a live
-preview of incomplete or invalid stickers. A valid entry replaces it when
-submitted. Camera rotation never changes the chosen Up/Front reference frame.
+The starting screen has no center form, manual grids, mode toggles, metrics,
+or WebGL scene. **Enter colors manually** and **Try a scramble** are quiet
+secondary routes. Instruction style, the camera, and playback options appear
+when relevant. Orbiting the virtual camera never changes the physical
+Up/Front reference frame.
+
+**Retake a face photo** keeps the six accepted images after confirming removal
+of the old solution. Cancelling the picker, cancelling processing, or submitting
+a failed replacement keeps the previous image. A successful replacement is
+checked again against the other five photos. **New cube** warns before clearing
+meaningful work and returns to the empty photo screen. Switching between
+automatic photos and manual/practice input likewise requires confirmation
+when it would discard data.
 
 ### Face entry reference
 
@@ -77,52 +150,211 @@ finding the next face.
 
 ### Take or upload six face photos
 
-After choosing and locking your own center colors:
+The main action opens the native photo picker, which may include a camera
+option on a phone. **Use device camera** supplies the explicit
+`capture="environment"` hint. Supported devices may open their camera;
+others show a picker. This is not a desktop webcam stream, and no camera
+permission is requested merely by loading the page.
 
-1. Open **Take/upload face photos**. Capture Front, Right, Back, Left, Up, and
-   Down separately. A single arbitrary picture cannot reveal all 54 stickers.
-   The selected face's center and neighboring top/right colors stay explicit;
-   **How to hold this face** gives the same orientation as manual entry.
-2. Choose **Take a photo** or **Upload photo**. Take a photo uses the native
-   `capture="environment"` file-input hint. Camera-capable devices may open
-   their camera; others may show a picker. If access is denied/unavailable,
-   upload an existing image or use the manual grids.
-3. Rotate the image upright, then drag the four numbered corners to the
-   outside corners of that face's nine stickers, clockwise from top-left.
-   The projected 3x3 overlay must follow the actual sticker rows. Arrow keys
-   adjust a focused corner by one image pixel; Shift uses ten pixels.
-4. Select **Detect nine colors**. The app samples the sticker interiors and
-   estimates their named colors. Correct the eight non-center estimates,
-   check the actual center, and confirm **I checked all nine colors**.
-   Uncertain, dark, mixed, or center-mismatched samples require attention.
-   A mismatched/uncertain center needs separate acknowledgment; it is never
-   silently substituted for your configured fixed center.
-5. **Use reviewed face** writes only that face to the normal sticker draft
-   and advances to a face still needing entry. Replacing existing colors
-   requires confirmation. Repeat until all six faces are entered, then
-   **Check colors & solve** runs the same physical validator and real solver
-   as manual input. Photo estimates never bypass validation.
+Each of the six slots has an explicit face name. Upload one face at a time,
+not an unlabeled batch whose order would have to be guessed. Successful
+captures show a small perspective-correct thumbnail and the detected center's
+name. Selecting a slot makes it the current capture/retake target.
 
-Use diffuse, even light, avoid flash/glare, and show one complete face with
-visible sticker boundaries. This is **assisted estimation, not automatic
-scanning**: even unflagged colors can be wrong, especially red/orange/yellow
-under unusual lighting. Review the physical cube, not just the estimates.
-Any face or sticker can still be entered/corrected manually.
+Use even, diffuse light and a little space around the whole face. All nine
+stickers and their boundaries must be visible. Avoid flash glare, occlusion,
+severe tilt, other visible grids, and busy backgrounds. Keep the displayed
+top edge up. Back is not mirrored; Up has Front beyond its bottom edge; Down
+has Front beyond its top edge.
+
+There is no required setup, alignment, or review stage on the automatic
+happy path. Retakes are still necessary when the image does not support a
+confident reading. The app does not invent unseen stickers or force detected
+colors to satisfy nine-of-each counts.
 
 JPEG, PNG, and WebP still images are supported, up to **16 MiB**, **24 million
 source pixels**, and **8192 pixels on either edge**. Convert HEIC/HEIF first.
 SVG, GIF, and animated PNG/WebP are rejected. Headers and bounds are checked
-before decoding. Images are reduced to at most 1024 pixels per edge, then
-sampled through a perspective-correct four-corner mapping using median RGB
-samples and exposure-normalized CIELAB matching. Confident, reviewed center
-samples can supplement that session's reference colors.
+before decoding. Images are reduced to at most 1024 pixels per edge.
+EXIF orientation is applied by the browser decoder before grid detection.
+The six photographed centers provide the calibration; their physical color
+scheme is derived, not selected from an assumed Up/Front preset.
 
 Photos and previews remain local, in memory: no server uploads, browser
-storage, external recognition API, or live camera stream. Cancelling the
-picker keeps the current review and entered colors. Failed replacements keep
-the previous photo; abandoning/replacing a review, resetting, or entering the
-solver invalidates pending work and releases its local preview URL. A
-20-second decode timeout is explicit and leaves your cube unchanged.
+storage, external recognition API, or live camera stream. Full working images
+are released after processing. Accepted captures retain only their nine RGB
+samples and small thumbnails, including while a solution is displayed.
+Replacement, confirmed abandonment, reset, and unmount release the appropriate
+object URLs. Generation checks prevent late processing from restoring reset
+input. Photo work has explicit cancellation and a 20-second timeout; solving
+has a separate two-minute limit.
+
+![CubeGuide's automatic photo workflow with accepted face thumbnails, detected center names, and a short holding guide for the next face. There are no crop handles or required review checkboxes.](docs/images/automatic-photos.jpg)
+
+### How automatic photo reading works
+
+This is a small, explainable color-analysis pipeline, not a machine-learning
+model or a cloud recognition service.
+
+| Stage | Implementation and reason |
+| --- | --- |
+| File gate | Check MIME/signature, byte size, dimensions, and supported still-image format before allocating the main decoded pixel buffer. Oversized or corrupt files produce a visible error, not a guessed face. |
+| Decode | Use `createImageBitmap` with EXIF orientation support, with a native image fallback. Downsample while preserving aspect ratio; keep at most a 1024-by-1024 working raster. |
+| Locate | Scan the whole image at a bounded 480-pixel working scale. Color/brightness segmentation and smoothed contrast boundaries produce connected components, including on dark, gray, or light cube bodies. Reject non-sticker shapes and excessive clutter. This is real localization, not a default central crop. |
+| Fit | Search candidate components for nine centers in a projective 3x3 grid. Fit a homography, measure positional error, and extrapolate the outer face corners from the corner-sticker centers. Reject missing, multiple, clipped, tiny, or strongly distorted grids. |
+| Sample | Collect an interior 9-by-9 sample patch for each sticker. Per-channel medians reduce the influence of black borders, noise, and small reflections. |
+| Identify centers | Match the six middle stickers to plausible named standard colors. Reject uncertain, repeated, or insufficiently separated centers. Do not force a one-to-one assignment simply because six photos were supplied. |
+| Calibrate | Normalize exposure, convert sRGB to D65 CIELAB, and reclassify all 54 samples against the six actual center samples. Reject unclear/distant matches; this is not invariant to colored lighting or glare. |
+| Orient | Use the named face and displayed top-edge convention. If piece identities disagree, try the bounded set of in-plane quarter turns and accept recovery only when it yields one distinct physically valid cube. Multiple interpretations require a retake. |
+| Validate | Use the existing physical validator for colors, centers, pieces, orientations, and parity. Count, edge-flip, corner-twist, and parity failures are not silently “repaired” into a different cube. |
+| Solve | Supply the complete photo capture through the normal input boundary, then run the established solver and independent replay. Only a verified result becomes a solution; playback stays deliberate. |
+
+Grid location, color analysis, and orientation recovery run in the photo
+worker, separate from the solver worker. The main-thread client checks
+response shapes and independently validates a claimed reconstruction.
+Browser-native image decoding and small canvas previews remain bounded
+asynchronous operations.
+
+A single image cannot reveal the hidden faces of an opaque cube. Even three
+visible faces usually obscure parts of other stickers and do not supply all
+54 colors. Six deliberately oriented face images avoid inventing unseen
+state. The same Back/Up/Down convention applies to photos and manual grids.
+A correctly oriented, already valid literal reading is not replaced by a
+different valid interpretation. Rotation recovery is a fallback, not a claim
+that arbitrary unlabeled or mirrored photos can be reconstructed uniquely.
+
+Confidence scores are internal heuristics, not accuracy probabilities. A
+physically valid cube is necessary but does not prove that every pixel was
+recognized correctly: a consistent wrong or mislabeled reading can describe
+another valid cube. Compare the displayed cube with your physical one before
+following moves. This caution does not add a mandatory review checkbox.
+
+### Manual entry and optional alignment tools
+
+Choose **Enter colors manually**, select six distinct center colors, and
+**Lock centers & enter stickers**. Paint the remaining 48 stickers with
+named colors. Centers stay fixed. `?` and a striped background mean empty,
+not white. The six interactive grids include explicit top/right references,
+and **Check colors & solve** reports actionable physical errors.
+
+After locking centers, **Align/review a face photo** opens the original
+assisted editor as an optional fallback. It is not part of the default
+automatic path. Rotate the photo upright and place the four numbered handles
+around the face, clockwise from top-left. Arrow keys move a focused handle
+by one image pixel; Shift uses ten. **Detect nine colors** creates editable
+named estimates. Check all nine colors and separately acknowledge a
+center mismatch before **Use reviewed face** commits that face.
+
+This optional editor preserves fixed centers and all other faces. Replacing
+entered colors or abandoning a review uses explicit confirmation. Repeated
+requests focus the same draft instead of resetting it. **Edit colors** from a
+solution restores the original 54 colors in the manual editor, not a partly
+played state.
+
+## Architecture and why it is built this way
+
+```mermaid
+flowchart LR
+  Photos["Six labeled photos"] --> Read["Photo worker: locate / sample / calibrate"]
+  Read --> Input["Complete photo capture"]
+  Manual["Manual or reviewed photo draft"] --> Validate["Physical validation"]
+  Input --> Validate
+  Validate --> Cube["Immutable cubie state"]
+  Cube --> Worker["Two-phase solver worker"]
+  Worker --> Replay["Independent move replay"]
+  Replay --> Steps["Frozen solution snapshots"]
+  Steps --> Playback["Playback reducer"]
+  Playback --> Scene["3D meshes and teaching UI"]
+```
+
+### Stack choices
+
+| Choice | Why it fits this application | Tradeoff |
+| --- | --- | --- |
+| React + TypeScript | Native controls, predictable component lifetimes, and typed contracts connect entry, worker messages, and playback. The UI can stay declarative without owning a second cube engine. | React alone does not make races safe; cancellation, generations, and input validation remain explicit. |
+| Vite | Provides a small static-app build, TypeScript development workflow, and native module-worker bundling. No server framework is needed for solving. | Development and production asset paths still need separate browser verification. |
+| Direct Three.js | Gives direct control over a fixed 27-cubelet scene, camera, layer highlighting, and exact transforms. The renderer is an adapter over the reducer state. | Camera/resource lifecycles are implemented explicitly instead of delegated to a React scene wrapper. |
+| Independent cube engine + `cubejs` | The app owns the state representation and can check an established solver's answer independently. This avoids inventing an unproven search algorithm or solving only by reversing known scrambles. | There are two implementations to reconcile at a narrow facelet boundary; conversion and oracle tests are important. |
+| Dedicated Web Workers | Photo localization/analysis and solver initialization/search do not block the main-thread controls. The solver receives a state, not the practice scramble history. | Starting workers has a cost; cancellation, bounded work, and stale-response guards remain explicit. |
+| Immutable snapshots + reducer | Forward, inverse, seek, restart, pause, and interruptions share one explicit transition model. Every committed step has an exact destination. | Keeping all solution snapshots uses some extra memory, but the cube and move sequence are small. |
+| Local geometric/color analysis | Automatically locates actual sticker grids and derives calibration from centers without accounts, cloud-vision costs, or model downloads. | Requires six labeled, sufficiently clear faces. Uncertain/ambiguous input needs retakes; optional alignment/manual correction remains available. |
+
+React Three Fiber, a global state-management package, and an animation library
+were not necessary for this fixed scene and reducer. That is a scope choice,
+not a claim that those tools are unsuitable generally.
+
+### One authoritative cube, several derived views
+
+`CubeState` holds four immutable arrays:
+
+| Field | Meaning |
+| --- | --- |
+| `cp` | Permutation of the eight corners. |
+| `co` | Orientation of each corner. |
+| `ep` | Permutation of the twelve edges. |
+| `eo` | Orientation of each edge. |
+
+The six detected or manually chosen center colors define the input reference frame separately.
+Facelets use **U, R, F, D, L, B** order, nine cells per face. Conversions map
+those facelets to pieces and back. The 54-color entry array is an **input
+draft**, not a second live cube: it can be incomplete or invalid until the
+validator accepts it. No example cube appears in the automatic landing flow.
+The secondary manual route retains its explicitly labeled 3D orientation
+reference until the user submits a valid entry.
+
+Moves are structured as `{ face, turns }`, with `turns` equal to `1`, `-1`,
+or `2`. Strings such as `R'` are parsed/formatted at boundaries. The app's
+move transformations come from integer facelet geometry, so the engine,
+facelet conversion, face-highlighting axis, and renderer use the same
+coordinate conventions. Tests also compare moves with an independent engine
+to catch correlated mistakes.
+
+### Solver boundary and verification
+
+`solve.ts` imports `cubejs` only in the worker or Node tests. The worker
+initializes the established two-phase tables, computes a sequence, and
+replays it. The client treats even that result as untrusted structured data:
+it validates the response and independently applies the moves to the
+**original request's cube**, not a potentially changed UI state.
+
+The resulting `VerifiedSolution` freezes moves and every step snapshot,
+including step zero. A stale request ID cannot replace a newer cube.
+Cancellation terminates pending work; an idle worker can be reused for a
+subsequent solve. Initialization, search, verification, failure, and a
+two-minute timeout are distinct states. There is no success-shaped fallback
+when solving or verification fails.
+
+`optimizeDeps.include: ['cubejs']` is deliberate. It prevents Vite's first
+worker use from discovering that dependency late and reloading the
+development page in the middle of a user's entry.
+
+### Animation and physical direction
+
+The playback reducer owns the committed cube, current step, transition,
+progress, target snapshot, speed, running state, and frame generation.
+The scene does not apply logical moves. It renders the committed state plus
+the current transition, rotating only the nine cubelets in the affected
+layer. Every frame starts from canonical lattice positions, rather than
+accumulating the previous frame's floating-point rotations.
+
+**Pause** freezes the active transition itself. **Previous** can reverse the
+unfinished portion of a turn; **Next** can complete or reverse an unfinished
+undo. **Seek** and **Restart** invalidate old frame generations and select
+exact snapshots. Changing speed scales future progress without jumping to
+another position. Hidden-tab playback is paused rather than allowed to
+silently finish moves.
+
+The physical direction cue is separate from algebraic notation. A half-turn
+is its own algebraic inverse, but backing out of a partially animated `R2`
+must reverse the actual arrow and motion. Clockwise/counter-clockwise always
+means looking straight at the named face, not looking at the scene from an
+arbitrary orbit-camera angle.
+
+Camera presets recreate OrbitControls to remove cached orientation and
+damping state. Camera orbit, zoom, and reset never change the logical cube
+or the user's chosen Front/Up colors.
+
+![CubeGuide paused during a real layer animation, with nine rotated cubelets, the matching face/direction cue, beginner instructions, previous/resume/next controls, and speed selection.](docs/images/solution-playback.jpg)
 
 ## Playback and practice
 
@@ -155,6 +387,13 @@ moves at the selected speed. It is **not** a prediction of human solve time.
 The move count counts each half-turn once. QTM counts it as two quarter turns.
 The two-phase solver produces valid solutions, **not guaranteed shortest ones**;
 even a simple position can receive a longer solution.
+
+At 1x, a quarter-turn is 900 ms, a half-turn 1250 ms, and automatic playback
+includes a 240 ms pause between moves. The estimate is derived from those
+durations at the selected speed. The separate “Quarter turns” and “Double
+turns” counts describe move types; QTM counts every double turn twice.
+Practice scrambles are fresh legal 25-move sequences, not a claim of uniform
+random-state sampling or an official competition scrambler.
 
 ### Keyboard
 
@@ -211,6 +450,59 @@ a transition progress value. Every frame begins with exact lattice positions,
 not previously rotated coordinates. At completion the reducer commits the
 next snapshot and the meshes return to exact axis-aligned transforms.
 
+### Why these validity checks matter
+
+Nine stickers of every color is necessary but not sufficient. A cube with
+one flipped edge, one twisted corner, a mirrored corner, or an unmatched
+permutation parity can have perfectly correct color totals and still be
+unreachable using legal face turns.
+
+The validator checks that all twelve edge identities and all eight corner
+identities appear once, that edge orientations sum to an even number, that
+corner orientations sum to a multiple of three, and that corner/edge
+permutation parity agrees. It reports identifiable piece colors and
+locations, but it does not invent one “bad piece” for a global parity error.
+See [`validation.ts`](src/cube/validation.ts) and its impossible-input tests.
+
+## Performance, accessibility, and privacy tradeoffs
+
+The interface stays task-focused rather than adding a marketing page.
+The default is one upload action, six compact face slots, short orientation
+guidance, and whitespace. Manual entry and practice are secondary. Center
+forms, manual grids, mode toggles, and example-cube controls are not shown
+before automatic capture. On narrow screens the solution's cube and task stack
+vertically; playback controls/current-move guidance dock near the viewport
+bottom. The photo action itself is visible without scrolling at the tested
+desktop and phone widths.
+
+Native buttons, selects, checkboxes, sliders, and dialogs provide familiar
+keyboard behavior. Programmatic focus advances to the next upload action,
+identifies retake errors, and moves to the verified solution or a confirmed
+new-input route. Existing photo data survives cancelled/failed replacements.
+Optional alignment handles support pointer/touch and arrow keys, use 44px
+targets on phones, and do not prevent scrolling elsewhere in the image.
+
+Names and W/Y/G/B/R/O symbols supplement colors. Empty cells have both `?`
+and a striped pattern. Focus outlines, piece-specific validation messages,
+center mismatch alerts, loading/cancellation states, and reduced motion are
+part of the normal workflow, not separate demonstration screens.
+
+The fixed 27-cubelet scene keeps rendering complexity bounded, but Three.js
+and WebGL are still a meaningful download/graphics cost. The viewport is
+lazy-loaded only when needed; it is neither mounted nor drawn on the default
+photo screen. Three.js has its own build chunk, and photo/solver work has
+separate worker assets. Image analysis uses a bounded raster rather than a large
+recognition model. There is no promised solve latency, frame rate, or camera
+accuracy for arbitrary hardware. The written guide and flat cube view remain
+useful when a graphics failure is explicitly reported.
+
+No backend receives the cube or photos, and no analytics or cloud-vision SDK
+is included. Local object URLs and decoded images are released on
+replacement, confirmed abandonment, reset, or unmount; pending operations
+are versioned/aborted. “Local processing” does not mean a service worker or
+offline installation is implemented: the browser must first load the static
+application assets, and refreshing loses the in-memory session.
+
 ## Tests
 
 ```sh
@@ -226,9 +518,11 @@ Vitest covers all 18 moves against an independent engine, four-turn and inverse
 identities, conversions, 200 seeded scramble round-trips, color/center entry,
 impossible states, worker cancellation/failure, immutable verification, physical
 direction cues, and deterministic playback interruptions. Photo tests cover
-color/lighting changes, actual perspective-distorted rasters, rotations,
-review and fixed-center guards, unsupported/oversized/animated inputs, and
-six-photo reconstruction with standard and alternate center schemes.
+full-frame location across translated/scaled/rolled/perspective rasters,
+light/gray/dark bodies, incomplete/multiple/cluttered grids, center-only
+calibration, unique versus ambiguous orientation recovery, worker response
+guards, review/fixed-center fallback, unsupported/oversized/animated inputs,
+and six-photo reconstruction with standard and alternate center schemes.
 
 Each full unit run performs **160 real solver cases**: 120 deterministic
 25-40-move scrambles entered through color mapping, 24 fresh cryptographically
@@ -239,28 +533,66 @@ The Playwright suite uses the actual browser UI and worker. It covers complete
 manual input, random solving, every playback control, all 18 signed layer
 animations, partial half-turn reversals, camera views, failures/cancellation,
 reset confirmation, keyboard handling, mobile touch, and reduced motion.
-The photo suite uploads actual generated PNG, JPEG, and WebP files for all six
-faces, moves the crop handles, checks the estimates and saved entry, solves
-that cube in the worker, and plays to a matching solved logical/visual state.
-It also checks corrections, center mismatch, overwrite protection, rotation,
-picker cancellation, corrupt/blank files, stale loading, preview cleanup, and
-mobile entry. Fixtures include image noise and an exposure gradient; they
-are not evidence of camera-hardware or uncontrolled real-world accuracy.
+The automatic suite starts fresh on desktop and touch-enabled mobile.
+It uploads six actual PNG/JPEG/WebP rasters, including an EXIF-oriented JPEG,
+off-center/perspective faces, and a quarter-turned face, without selecting
+centers, cropping, reviewing, or pressing an extra solve button. It verifies
+the derived 54 colors and original cube, replays every returned snapshot,
+and exercises actual layer motion through pause/resume to matching solved
+meshes. The first upload action is also checked at 320 pixels.
+
+Other cases cover ambiguous/duplicate/uncertain input, failed replacements,
+picker/processing cancellation, worker loading failure and retry, reset races,
+manual fallback, and preview cleanup. The separate assisted-photo regression
+still moves crop handles, corrects estimates, checks fixed-center/overwrite
+guards, solves its real entered cube, and verifies rendered motion.
+Fixtures include image noise and exposure gradients; they are not evidence
+of camera-hardware or uncontrolled real-world accuracy.
 Assertions inspect actual sticker meshes and their transforms, not just
 success text. The visibility interruption test explicitly simulates the
 Page Visibility event; mobile gestures run in touch-enabled Chromium.
 
 The suite starts its own server unless a server already responds on 5187.
-Every test verifies the CubeGuide title and scene identity, so a different
-application cannot silently satisfy it. Failure traces are in `test-results/`.
+Tests verify CubeGuide's actual controls and diagnostic identity, not merely
+the presence of a server. Automatic entry specifically has no initial scene.
+Failure traces are in `test-results/`.
 The complete playback case also attaches JSON synchronization evidence.
 
 To smoke-test the built worker and assets, run `npm run preview` in another
 terminal after building, then:
 
 ```sh
-CUBE_GUIDE_BASE_URL=http://127.0.0.1:4187 npm run test:e2e -- --grep 'random scramble ->|six real raster uploads'
+CUBE_GUIDE_BASE_URL=http://127.0.0.1:4187 npm run test:e2e -- --grep 'six photos alone|random scramble ->|six real raster uploads'
 ```
+
+For a focused landing-path check:
+
+```sh
+npm run test:e2e -- tests/e2e/automatic-photo.spec.ts
+```
+
+Test organization:
+
+| Suite | What it verifies |
+| --- | --- |
+| `engine.test.ts` | All move variants, identities/inverses, conversions, and seeded scramble round-trips. |
+| `validation.test.ts` | Real color entry, center mapping, counts, duplicated/mirrored pieces, flips, twists, and parity. |
+| `solver.test.ts` | Real established search over 160 valid cases, followed by replay verification. |
+| `worker-client.test.ts` | Malformed/incorrect responses, cancellation, stale results, and timeout behavior. |
+| `playback.test.ts`, `cue.test.ts` | Reducer transitions, interruptions, snapshots, speeds, and physically correct arrows. |
+| `photo.test.ts` | Sampling, perspective, orientation, lighting variations, file guards, review, and provider isolation. |
+| `automatic-photo.test.ts` | Actual grid localization, detected center schemes, calibrated reconstruction, orientation ambiguity, and impossible captures. |
+| `photo-worker.test.ts` | Pixel-buffer transfer, malformed responses, stale requests, independent validation, cancellation, and timeout. |
+| `app.spec.ts` | Actual browser workers, all controls, signed 3D turns, manual entry, camera, mobile, and reduced motion. |
+| `automatic-photo.spec.ts` | Upload-only desktop/mobile solving, real EXIF/perspective images, unsafe-input refusal, retention/focus, and solved mesh/model equality. |
+| `photo.spec.ts` | Secondary alignment/review, actual raster uploads, privacy/resource guards, and solved mesh/model equality. |
+
+Browser installation is a one-time environment step, not an app dependency
+download at runtime. In a minimal Linux environment, Playwright may also
+need its documented system libraries. The test configuration uses Chromium
+with software WebGL support; touch/device emulation does not certify a
+physical Android or iOS camera. There is no invented coverage percentage,
+CI status badge, or automatic deployment attached to these local commands.
 
 ## Source map
 
@@ -272,28 +604,103 @@ CUBE_GUIDE_BASE_URL=http://127.0.0.1:4187 npm run test:e2e -- --grep 'random scr
 | Playback and direction | `src/cube/animation/playback.ts`, `cue.ts`, `src/hooks/usePlayback.ts` |
 | 3D model and camera | `src/cube/rendering/CubeScene.ts`, `src/components/CubeViewport.tsx` |
 | Input providers and manual entry | `src/input/provider.ts`, `orientation.ts`, `src/components/FaceInput.tsx` |
-| Guided local photo entry | `src/components/PhotoInput.tsx`, `src/input/photo/{decode,load,geometry,analysis}.ts`, `src/styles/photo.css` |
+| Automatic photo entry | `src/components/AutomaticPhotoInput.tsx`, `src/input/photo/{locate,automatic,client,protocol,photo.worker}.ts`, `src/styles/automatic.css` |
+| Shared photo decoding/color math | `src/input/photo/{decode,load,geometry,analysis}.ts` |
+| Optional alignment/review | `src/components/PhotoInput.tsx`, `src/styles/photo.css` |
 | Teaching interface | `src/App.tsx`, `SolutionPanel.tsx`, `PracticePanel.tsx`, `CubeNet.tsx`, `Dialogs.tsx` |
-| Tests | `tests/unit/`, `tests/e2e/app.spec.ts`, `tests/e2e/photo.spec.ts` |
+| Tests and generated image fixtures | `tests/unit/`, `tests/e2e/`, `tests/fixtures/` |
 | Product/design context | `PRODUCT.md`, `DESIGN.md`, `.impeccable/` |
 
 Runtime dependencies: React 19.2, React DOM 19.2, Three.js 0.180, and cubejs
-1.3.2. Development tooling: TypeScript 5.9, Vite 6.4, Vitest 3.2, and
+1.3.2. Development tooling: TypeScript 5.9, Vite 6.4, Vitest 4.1, and
 Playwright 1.56. Exact resolutions are recorded in `package-lock.json`.
 
 For local debugging, the read-only `window.__cubeGuide.inspect()` returns
 logical facelets, verified snapshots, playback state, and geometric scene
-diagnostics. Rendered facelets are reconstructed from actual mesh positions,
+diagnostics (`visual: null` before a viewport is needed). Rendered facelets are reconstructed from actual mesh positions,
 orientations, and sticker colors. This API has no mutation or solver shortcuts.
+
+## Dependencies and audit decisions
+
+The dependency cleanup reproduced **45 advisory entries** in the original
+installed tree. Many came from `cubejs` declaring an obsolete npm 6 CLI as
+a production dependency, not from a runtime import in the solver itself.
+Its entry point loads only its cube and search modules. npm's production
+dependency classification is therefore not the same as what Vite ships in
+the browser.
+
+| Dependency | Resolution | Reason and scope |
+| --- | --- | --- |
+| `cubejs` | Kept at **1.3.2** | Preserve the established solver and tested API; do not downgrade the algorithm simply because an audit suggests removing its dependency chain. |
+| `cubejs` → `npm` | Scoped override to **11.20.0** | Replace the unused obsolete CLI tree with a release compatible with Node 20.19. This does not update the user's global npm or import the CLI into the app. npm 12 was not selected because its Node requirement is newer. |
+| `vite` | **6.4.3** | Same-major development/build-tool patch for the reported advisories. The deployed site consists of static assets, not a running Vite development server. |
+| `vitest` | **4.1.11** | Test-only major update needed for the remaining mocker advisory; 3.2.7 still reported it. The documented Node >=20 / Vite >=6 requirements match this project, and the existing test configuration and tests pass without API workarounds. |
+
+The relevant remaining Vitest issue before that update was
+[GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9).
+The [Vitest migration guide](https://vitest.dev/guide/migration) explains its
+compatibility and breaking changes. This project does not use the removed
+workspace, coverage, custom-pool, or browser-provider configuration.
+
+After the manifest changes, the lockfile was resolved and the clean install
+was reproduced:
+
+```sh
+npm ci
+npm audit
+npm audit --omit=dev
+npm ls cubejs npm vite vitest --depth=2
+```
+
+Both full and production-scope audits returned **0 vulnerabilities** against
+the advisory feed used for this revision. No `npm audit fix --force`,
+advisory suppression, solver shortcut, or global package-manager change was
+used. Advisory data changes over time; repeat these commands before future
+publication rather than treating this result as a perpetual guarantee.
+
+## Static hosting and Vercel readiness
+
+The application builds to ordinary static files. It needs no server functions,
+database, environment secrets, camera backend, or account system. Both workers
+are generated assets loaded from the same origin. Use a real HTTP(S) server;
+`file://` is not a supported deployment.
+
+For an authorized Vercel project after the source has been pushed to
+`ass-ier/CubeGuide`, the relevant build settings are:
+
+| Setting | Value |
+| --- | --- |
+| Framework | Vite |
+| Root directory | Repository root |
+| Install command | `npm ci` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| Build Node version | A supported LTS satisfying the package engines, such as Node 24 |
+| App environment variables | None required |
+
+There is no client-side path router or server API to rewrite. Hosting must
+serve the emitted JavaScript, CSS, and worker assets correctly. A static host
+serves the application files; photo processing still occurs in the user's
+browser. Native capture behavior remains device/browser dependent even on
+HTTPS.
+
+This repository does **not** claim an already published Vercel site, contain
+an anonymous deployment URL, or imply authorization for another account.
+Owner authentication and the required GitHub source push are separate from
+build readiness. `.vercel/`, `.env*`, generated output, dependencies, test
+traces, and local tool caches are excluded from Git. No application license,
+CI pipeline, paid service, custom domain, or hosting resource is invented by
+these instructions.
 
 ## Deliberate limitations
 
-- **Photo input is assisted, not fully automatic.** Six photos, user-aligned
-  corners, and explicit color review are required. Native camera capture is a
-  browser/device hint, not a guaranteed camera UI; physical camera hardware
-  and arbitrary lighting have not been certified. There is no live-video
-  scanner or reconstruction of unseen stickers. `CubeInputProvider` remains
-  the boundary for any future input source.
+- **Automatic does not mean every photo is readable.** The default path needs
+  six labeled, sufficiently clear faces, visible sticker boundaries, and the
+  displayed top-edge convention. It rejects uncertain/ambiguous readings
+  rather than choosing a convenient valid cube. Native capture is a
+  browser/device hint; physical camera hardware and arbitrary lighting have
+  not been certified. There is no live-video scanner or hidden-sticker
+  reconstruction. Manual alignment/review is an optional fallback.
 - **No persistence.** Refreshing closes the current session state. Reset/new
   cube actions within the app warn before discarding meaningful work.
 - Standard six-color 3x3 cubes only; no picture-cube center orientation,
@@ -304,3 +711,18 @@ orientations, and sticker colors. This API has no mutation or solver shortcuts.
   explicitly reported; the written instructions and flat face view remain
   usable. Chromium desktop/mobile emulation is automated; real iOS Safari and
   Android devices have not been independently certified.
+- Beginner mode explains individual turns; it is not a complete named-method
+  course, a shortest-solution guarantee, or a physical robot controller.
+
+## Realistic extensions
+
+The input-provider boundary can accept other capture sources without changing
+the validator, solver, or renderer. The implemented detector can be extended
+with better white-balance handling and a representative real-device/photo
+corpus; stronger accuracy claims or live capture require that evidence.
+Persistence/PWA support would need explicit restore, validation, privacy, and
+stale-solution rules. Drag-to-turn interaction would need to join the existing
+playback state machine rather than moving meshes independently.
+
+Those are possible follow-on projects, not implemented capabilities of the
+current app.

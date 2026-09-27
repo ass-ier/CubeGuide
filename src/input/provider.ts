@@ -42,6 +42,15 @@ export class ManualInputProvider implements CubeInputProvider {
   }
 }
 
+export class AutomaticPhotoInputProvider implements CubeInputProvider {
+  readonly id = 'photo' as const;
+  constructor(private readonly stickers: readonly Color[]) {}
+  capture(): InputCapture {
+    if (this.stickers.length !== 54 || !this.stickers.every(isColor)) throw new Error('Six automatically read photos must supply exactly 54 named colors.');
+    return Object.freeze({ provider: this.id, stickers: Object.freeze([...this.stickers]) });
+  }
+}
+
 export class PhotoInputProvider implements CubeInputProvider {
   readonly id = 'photo' as const;
   constructor(

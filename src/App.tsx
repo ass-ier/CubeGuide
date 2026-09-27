@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { AutomaticPhotoInput } from './components/AutomaticPhotoInput';
 import { ColorMark } from './components/ColorMark';
 import { CubeNet } from './components/CubeNet';
-import { CubeViewport, type CubeViewportHandle } from './components/CubeViewport';
+import type { CubeViewportHandle } from './components/CubeViewport';
 import { DiscardDialog, NotationGuide, type PendingChange } from './components/Dialogs';
 import { FaceInput } from './components/FaceInput';
 import { Icon } from './components/Icon';
@@ -18,7 +19,7 @@ import { validateColors, type ValidationIssue } from './cube/validation';
 import { usePlayback } from './hooks/usePlayback';
 import { useReducedMotion } from './hooks/useReducedMotion';
 import { useSolver } from './hooks/useSolver';
-import { emptyEntry, entryWithCenters, ManualInputProvider, PhotoInputProvider, paintSticker, schemeFromCenters } from './input/provider';
+import { AutomaticPhotoInputProvider, emptyEntry, entryWithCenters, ManualInputProvider, PhotoInputProvider, paintSticker, schemeFromCenters, type InputCapture } from './input/provider';
 import type { CubeGuideInspection } from './types/diagnostics';
 
 const PHASE_COPY = {
@@ -26,12 +27,13 @@ const PHASE_COPY = {
   solving: { title: 'Finding your solution', detail: 'Searching for a valid move sequence in a background worker. You can still rotate the cube.' },
   verifying: { title: 'Checking every turn', detail: 'Replaying the solution on a copy of your original cube before accepting it.' },
 };
+const CubeViewport = lazy(() => import('./components/CubeViewport').then((module) => ({ default: module.CubeViewport })));
 
 export default function App() {
   const initial = useMemo(solvedCube, []);
   const [state, dispatch] = usePlayback(initial);
   const solver = useSolver();
-  const [source, setSource] = useState<'entry' | 'practice'>('entry');
+  const [source, setSource] = useState<'photo' | 'entry' | 'practice'>('photo');
   const [centers, setCenters] = useState<Partial<Record<Face, Color>>>({});
   const [scheme, setScheme] = useState<ColorScheme | null>(null);
   const [entry, setEntry] = useState(emptyEntry);
@@ -41,6 +43,10 @@ export default function App() {
   const [entryPreview, setEntryPreview] = useState(false);
   const [photoEntryOpen, setPhotoEntryOpen] = useState(false);
   const [entryFocusRequest, setEntryFocusRequest] = useState(0);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [photoWorking, setPhotoWorking] = useState(false);
+  const [photoSession, setPhotoSession] = useState(0);
+  const photoVersion = useRef(0);
   const [scramble, setScramble] = useState<readonly Move[]>([]);
   const [advanced, setAdvanced] = useState(false);
   const [symbols, setSymbols] = useState(true);
@@ -55,7 +61,8 @@ export default function App() {
   const displayScheme = scheme ?? PRACTICE_SCHEME;
   const solution = state.solution;
   const cue = turnCue(state);
-  const meaningful = source === 'practice' || !!solution || Object.keys(centers).length > 0 || entry.some(Boolean);
+  const meaningful = source === 'practice' || !!solution || Object.keys(centers).length > 0 || entry.some(Boolean) || photoCount > 0;
+  const showWorkspace = source !== 'photo' || entryPreview;
   const solved = !!solution && !state.transition && isSolved(state.cube);
   const animation = useMemo(() => state.transition
     ? { move: state.transition.move, progress: state.transition.progress } : null, [state.transition]);
@@ -63,16 +70,23 @@ export default function App() {
   useEffect(() => { manualLock.current = !!state.transition; }, [state.transition]);
 
   function requestChange(change: PendingChange) {
-    if (meaningful || busy) {
+    if (meaningful || busy || photoWorking) {
       dispatch({ type: 'pause' });
       setPendingChange(change);
     } else change.run();
   }
 
-  function clearToEntry() {
+  function clearPhotoSession() {
+    setPhotoSession(++photoVersion.current);
+    setPhotoCount(0);
+    setPhotoWorking(false);
+  }
+
+  function clearToEntry(nextSource: 'photo' | 'entry' = 'photo') {
     solver.cancel();
     dispatch({ type: 'load', cube: solvedCube() });
-    setSource('entry');
+    clearPhotoSession();
+    setSource(nextSource);
     setCenters({});
     setScheme(null);
     setEntry(emptyEntry());
@@ -81,7 +95,7 @@ export default function App() {
     setOperationError(null);
     setEntryPreview(false);
     setPhotoEntryOpen(false);
-    setEntryFocusRequest(0);
+    setEntryFocusRequest((request) => request + 1);
     setActiveFace('F');
     manualLock.current = false;
     viewport.current?.lookAt(null);
@@ -90,9 +104,41 @@ export default function App() {
   function requestNewCube() {
     requestChange({
       title: 'Start with a new cube?',
-      description: 'Your entered colors, practice cube, and current solution will be discarded. Keep your cube to continue where you are.',
+      description: 'Your photos, entered colors, practice cube, and current solution will be discarded. Keep your cube to continue where you are.',
       confirmLabel: 'Start new cube',
       run: clearToEntry,
+    });
+  }
+
+  function requestManualMode() {
+    requestChange({
+      title: 'Switch to manual entry?',
+      description: 'Your photos and current cube will be cleared. You can enter all six faces by hand, or use the optional photo alignment tools.',
+      confirmLabel: 'Enter colors manually',
+      run: () => clearToEntry('entry'),
+    });
+  }
+
+  function requestAutomaticMode() {
+    requestChange({
+      title: 'Switch to automatic photos?',
+      description: 'Your manual entry and any solution will be cleared. Add six face photos; their centers and colors will be read automatically.',
+      confirmLabel: 'Use automatic photos',
+      run: clearToEntry,
+    });
+  }
+
+  function retakePhotos() {
+    requestChange({
+      title: 'Retake a face photo?',
+      description: 'Your current solution will be removed. All six accepted photos stay available; a failed or cancelled replacement will not remove them.',
+      confirmLabel: 'Retake photos',
+      run: () => {
+        solver.cancel();
+        dispatch({ type: 'load', cube: state.initialCube });
+        setEntryPreview(false);
+        setEntryFocusRequest((request) => request + 1);
+      },
     });
   }
 
@@ -116,6 +162,7 @@ export default function App() {
       const moves = generateScramble();
       const cube = applyAlgorithm(solvedCube(), moves);
       solver.cancel();
+      clearPhotoSession();
       dispatch({ type: 'load', cube });
       setSource('practice');
       setScheme(PRACTICE_SCHEME);
@@ -137,7 +184,7 @@ export default function App() {
   function requestPractice() {
     requestChange({
       title: 'Try a new practice scramble?',
-      description: 'This replaces your current cube and any solution with a newly generated, legal scramble.',
+      description: 'This replaces your current cube, photos, and any solution with a newly generated, legal scramble.',
       confirmLabel: 'Generate scramble',
       run: createPractice,
     });
@@ -175,10 +222,11 @@ export default function App() {
   function editColors() {
     requestChange({
       title: 'Edit the starting cube?',
-      description: 'The current solution will be removed. Your original cube colors will stay in the face editor, ready to correct and solve again.',
+      description: `The current solution will be removed. Your original cube colors will stay in the face editor, ready to correct and solve again.${source === 'photo' ? ' Photo previews will be cleared.' : ''}`,
       confirmLabel: 'Edit colors',
       run: () => {
         solver.cancel();
+        clearPhotoSession();
         setEntry(toColors(state.initialCube, displayScheme));
         setScheme(displayScheme);
         setCenters({ ...displayScheme });
@@ -192,18 +240,26 @@ export default function App() {
     });
   }
 
-  async function solveEntry() {
-    const result = validateColors(new ManualInputProvider(entry).capture().stickers);
+  async function solveColors(capture: InputCapture) {
+    const result = validateColors(capture.stickers);
     if (!result.ok) {
       setIssues(result.issues);
+      if (capture.provider === 'photo') setOperationError(result.issues.map((issue) => issue.message).join(' '));
       return;
     }
     setIssues([]);
+    setOperationError(null);
+    setEntry(capture.stickers);
+    setCenters({ ...result.scheme });
     setScheme(result.scheme);
     setEntryPreview(true);
     dispatch({ type: 'load', cube: result.cube });
     const verified = await solver.solve(result.cube);
     if (verified) dispatch({ type: 'solution', solution: verified });
+  }
+
+  async function solveEntry() {
+    await solveColors(new ManualInputProvider(entry).capture());
   }
 
   async function solvePractice() {
@@ -284,46 +340,55 @@ export default function App() {
   return (
     <>
       <a className="skip-link" href="#main">Skip to cube solver</a>
-      <header className="site-header">
+      <header className={`site-header ${showWorkspace ? '' : 'photo-header'}`}>
         <a className="brand" href="#main" aria-label="CubeGuide home"><span className="brand-symbol"><Icon name="cube" size={30} /></span><span>CubeGuide<small>Rubik&apos;s Cube solver</small></span></a>
         <div className="header-actions">
+          {!showWorkspace && (photoCount > 0 || photoWorking) && <button className="text-button" onClick={requestNewCube}>New cube</button>}
+          {showWorkspace && <>
           <button className="text-button guide-button" aria-label="Turn guide" onClick={() => setGuideOpen(true)}><Icon name="help" size={18} /><span>Turn guide</span></button>
           <div className="mode-switch" role="group" aria-label="Instruction style">
             <button aria-pressed={!advanced} onClick={() => setAdvanced(false)}>Beginner</button>
             <button aria-pressed={advanced} onClick={() => setAdvanced(true)}>Advanced</button>
           </div>
+          </>}
         </div>
       </header>
 
-      <main id="main" className={`page-shell ${solution ? 'has-solution' : ''}`}>
-        <div className="page-heading">
+      <main id="main" className={`page-shell ${solution ? 'has-solution' : ''} ${showWorkspace ? '' : 'photo-landing'}`}>
+        {showWorkspace && <div className="page-heading">
           <div>
             <h1>{solved ? 'A good turn of events.' : solution ? 'Let\u2019s bring it all together.' : 'Every cube has a way home.'}</h1>
             <p>{solution ? 'Follow the turns. Find your rhythm. You\u2019re in control.' : 'Your colors. A clear solution. One turn at a time.'}</p>
           </div>
           <button className="button secondary new-cube-button" onClick={requestNewCube}><Icon name="cube" size={18} /> New cube</button>
-        </div>
+        </div>}
 
         {source === 'entry' && !solution && !busy && (
           <section className="entry-actions" aria-label="Choose how to enter your cube">
             <div className="entry-action-buttons">
-              <button className={`button ${photoEntryOpen || scheme || Object.keys(centers).length ? 'secondary' : 'primary'}`}
-                data-testid="landing-photo-action" aria-expanded={photoEntryOpen}
-                aria-controls="cube-entry" aria-describedby="photo-entry-expectation" onClick={requestPhotoEntry}>
-                <Icon name="camera" size={19} /> Take/upload face photos
-              </button>
-              <button className="text-button" aria-pressed={!photoEntryOpen} onClick={requestManualEntry}>
+              <button className="text-button" onClick={requestAutomaticMode}><Icon name="camera" size={18} /> Use automatic photos</button>
+              {scheme && <button className="text-button" aria-expanded={photoEntryOpen}
+                aria-controls="cube-entry" onClick={requestPhotoEntry}><Icon name="upload" size={17} /> Align/review a face photo</button>}
+              {photoEntryOpen && <button className="text-button" onClick={requestManualEntry}>
                 <Icon name="edit" size={17} /> Enter colors manually
-              </button>
+              </button>}
               <button className="text-button" onClick={requestPractice}><Icon name="shuffle" size={17} /> Try a scramble</button>
             </div>
-            <p id="photo-entry-expectation">Six face photos, reviewed by you. Photos and solving stay on your device.</p>
           </section>
         )}
 
         {operationError && <div className="error-banner" role="alert"><Icon name="alert" /><p>{operationError}</p><button className="text-button" onClick={() => setOperationError(null)}>Dismiss</button></div>}
 
-        <div className="workspace">
+        {source === 'photo' && <div hidden={showWorkspace}>
+          <AutomaticPhotoInput key={photoSession} visible={!showWorkspace} focusRequest={entryFocusRequest}
+            onCount={(count) => { if (photoVersion.current === photoSession) setPhotoCount(count); }}
+            onWorking={(working) => { if (photoVersion.current === photoSession) setPhotoWorking(working); }}
+            onComplete={(stickers) => {
+              if (photoVersion.current === photoSession) void solveColors(new AutomaticPhotoInputProvider(stickers).capture());
+            }} onManual={requestManualMode} onPractice={requestPractice} />
+        </div>}
+
+        {showWorkspace && <div className="workspace">
           <section className="cube-column" aria-label="Interactive cube and orientation">
             <div className="cube-stage">
               <div className="stage-toolbar">
@@ -333,8 +398,10 @@ export default function App() {
                 </span>
                 <button className="text-button" onClick={() => viewport.current?.lookAt(null)}><Icon name="restart" size={16} /> Reset view</button>
               </div>
-              <CubeViewport ref={viewport} cube={state.cube} scheme={displayScheme} animation={animation}
-                highlight={cue} symbols={symbols} reducedMotion={reducedMotion} />
+              <Suspense fallback={<div className="cube-viewport viewport-loading" role="status">Loading the interactive cube...</div>}>
+                <CubeViewport ref={viewport} cube={state.cube} scheme={displayScheme} animation={animation}
+                  highlight={cue} symbols={symbols} reducedMotion={reducedMotion} />
+              </Suspense>
               <div className="stage-hint"><span className="drag-icon" aria-hidden="true">↔</span> Drag to orbit <span className="separator">·</span> Scroll or pinch to zoom</div>
               <div className="camera-controls">
                 <label>Look at
@@ -389,13 +456,21 @@ export default function App() {
                 <button className="button secondary full-width" onClick={solver.cancel}>Cancel solving</button>
               </section>
             ) : solution ? (
-              <SolutionPanel state={state} scheme={displayScheme} advanced={advanced} onAction={dispatch}
+              <SolutionPanel state={state} scheme={displayScheme} advanced={advanced} onAction={dispatch} focusOnReady={source === 'photo'}
                 onViewFace={(face) => viewport.current?.lookAt(face)} onEdit={editColors} />
             ) : source === 'practice' ? (
               <PracticePanel scramble={scramble} advanced={advanced} animating={!!state.transition}
                 running={state.running} activeTurn={state.transition?.move ?? null}
                 onToggleTurn={() => dispatch({ type: state.running ? 'pause' : 'play' })}
                 onSolve={solvePractice} onScramble={requestPractice} onEnter={requestNewCube} onTurn={applyDirectTurn} />
+            ) : source === 'photo' ? (
+              <section className="entry-content photo-ready-panel">
+                <h2>Your photos are ready.</h2>
+                <p>Your cube and all six photos are preserved. Find its solution, or retake a face.</p>
+                <button className="button primary full-width" onClick={() => void solveEntry()}>Find my solution <Icon name="arrow" /></button>
+                <button className="text-button" onClick={retakePhotos}>Retake a face photo</button>
+                <button className="text-button" onClick={editColors}>Correct colors manually</button>
+              </section>
             ) : (
               <FaceInput centers={centers} scheme={scheme} entry={entry} selectedColor={selectedColor}
                 activeFace={activeFace} issues={issues}
@@ -423,11 +498,14 @@ export default function App() {
                 }} />
             )}
           </aside>
-        </div>
-        {solution && <SolutionTimeline state={state} onAction={dispatch} />}
+        </div>}
+        {showWorkspace && solution && <SolutionTimeline state={state} onAction={dispatch} />}
+        {showWorkspace && solution && source === 'photo' && <div className="photo-retake-action"><button className="text-button" onClick={retakePhotos}><Icon name="camera" size={17} /> Retake a face photo</button></div>}
       </main>
 
-      <footer className="site-footer"><span>A little guidance for the cube in your hands.</span><span>Manual or photo entry <span className="separator">·</span> On-device solving</span></footer>
+      <footer className={`site-footer ${showWorkspace ? '' : 'photo-footer'}`}>{showWorkspace
+        ? <><span>A little guidance for the cube in your hands.</span><span>Manual or photo entry <span className="separator">·</span> On-device solving</span></>
+        : <span>Photos are processed on your device. Nothing is uploaded to a server.</span>}</footer>
       <DiscardDialog change={pendingChange} onCancel={() => setPendingChange(null)} onConfirm={() => {
         const change = pendingChange;
         setPendingChange(null);

@@ -35,6 +35,7 @@ async function waitAtStep(page: Page, step: number) {
 }
 
 async function centers(page: Page, scheme: ColorScheme) {
+  if ((await inspect(page)).source === 'photo') await page.getByRole('button', { name: 'Enter colors manually', exact: true }).click();
   for (const face of FACES) await page.getByLabel(`${FACE_NAMES[face]} center color`).selectOption(scheme[face]);
   await page.getByRole('button', { name: 'Lock centers & enter stickers' }).click();
 }
@@ -72,6 +73,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await expect(page).toHaveTitle("CubeGuide — Rubik's Cube Solver");
+  await page.getByRole('button', { name: 'Enter colors manually', exact: true }).click();
   await page.waitForFunction(() => !!window.__cubeGuide?.inspect().visual);
   await aligned(page, SOLVED);
 });
@@ -263,6 +265,10 @@ test('reset protects meaningful input, and changing centers cannot silently rein
   expect((await inspect(page)).entry.every((color) => color === null)).toBe(true);
   await page.getByRole('button', { name: 'New cube', exact: true }).click();
   await page.getByRole('button', { name: 'Start new cube', exact: true }).click();
+  await expect(page.getByTestId('landing-photo-action')).toBeVisible();
+  expect((await inspect(page)).source).toBe('photo');
+  expect((await inspect(page)).visual).toBe(null);
+  await page.getByRole('button', { name: 'Enter colors manually', exact: true }).click();
   for (const face of FACES) await expect(page.getByLabel(`${FACE_NAMES[face]} center color`)).toHaveValue('');
   expect((await inspect(page)).verified).toBe(false);
   await aligned(page, SOLVED);
@@ -278,7 +284,7 @@ test('cancels a real initializing worker and ignores results after new input', a
   const reset = await inspect(page);
   expect(reset.verified).toBe(false);
   expect(reset.solverStatus).toBe('idle');
-  expect(reset.source).toBe('entry');
+  expect(reset.source).toBe('photo');
   expect(reset.entry.every((sticker) => sticker === null)).toBe(true);
   await expect(page.getByText('Solution ready', { exact: true })).toHaveCount(0);
 });
@@ -469,6 +475,8 @@ test.describe('mobile touch and reduced motion', () => {
     await expect(page.getByRole('checkbox', { name: 'Reduce motion', exact: true })).toBeChecked();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const cameraBefore = (await inspect(page)).visual!.camera;
+    await page.locator('canvas').scrollIntoViewIfNeeded();
+    await expect(page.locator('canvas')).toBeInViewport({ ratio: 1 });
     const box = await page.locator('canvas').boundingBox();
     if (!box) throw new Error('No touch canvas.');
     const cdp = await context.newCDPSession(page);
