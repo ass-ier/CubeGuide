@@ -1,0 +1,14 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.playwright-mcp/
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+.vercel/
+.impeccable/hook.cache.json
+*.log
+*.tsbuildinfo

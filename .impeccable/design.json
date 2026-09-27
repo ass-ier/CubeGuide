@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-27T20:22:05Z",
+  "title": "Design System: CubeGuide",
+  "extensions": {
+    "shadows": [
+      { "name": "mobile-controls", "value": "0 5px 22px #24324724", "purpose": "Separate persistent playback controls from the scrolling page." },
+      { "name": "dialog", "value": "0 24px 70px #12203a33", "purpose": "Protected focus for destructive-action confirmation." },
+      { "name": "photo-crop-handle", "value": "0 2px 6px #14213d55", "purpose": "Keep interactive crop targets distinct from arbitrary photo backgrounds." }
+    ],
+    "motion": [
+      { "name": "control-feedback", "value": "140ms", "purpose": "Background and border feedback on buttons." },
+      { "name": "quarter-turn", "value": "900ms", "purpose": "One physical quarter-turn at 1x." },
+      { "name": "half-turn", "value": "1250ms", "purpose": "One physical half-turn at 1x." },
+      { "name": "between-moves", "value": "240ms", "purpose": "Reading pause between automatic moves at 1x." }
+    ],
+    "breakpoints": [
+      { "name": "wide-cube", "value": "1450px" },
+      { "name": "compact-desktop", "value": "1050px" },
+      { "name": "stacked-workspace", "value": "800px" },
+      { "name": "phone", "value": "520px" },
+      { "name": "single-face-column", "value": "359px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The next meaningful task or playback action.",
+      "html": "<button class=\"cube-action\">Play solution</button>",
+      "css": ".cube-action { font: 600 14px system-ui,sans-serif; min-height:46px; padding:11px 16px; color:#fff; background:var(--accent,#3552ba); border:1px solid transparent; border-radius:9px; cursor:pointer; } .cube-action:hover { background:var(--accent-hover,#29439d); } .cube-action:focus-visible { outline:3px solid #3c60d4; outline-offset:3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Daylight workbench",
+    "overview": "The real puzzle leads; manual or reviewed local photo entry, a clear reference frame, and readable per-move teaching support it.",
+    "keyCharacteristics": ["Large real 3D cube", "Explicit physical orientation", "Named colors and symbols", "Reviewed six-face photo assistance", "Predictable playback"],
+    "dos": ["Keep the cube and current action usable together on phones.", "Distinguish solution verification from the current solved state.", "Require alignment and explicit color review before committing each photo face."],
+    "donts": ["Do not change the logical reference frame when moving the camera.", "Do not present color estimates as confirmed input or promise automatic unseen-face scanning."]
+  }
+}
