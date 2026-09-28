@@ -35,11 +35,11 @@ export function readAutomaticFace(image: Pixels): FaceReading {
   const result = samplePhoto(image, region.quad);
   const center = result.predictions[4];
   if (!center.color || center.confidence < 0.45 || center.reason) {
-    throw new Error('The center color is not clear enough. Retake this face in even light, without glare.');
+    throw new Error('The center color is not clear enough. Keep its unmarked color visible and add diffuse light without flash. If the color is worn away, use manual entry.');
   }
-  if (result.predictions.some((prediction) => Math.max(...prediction.sample) < 48
-    || prediction.reason?.startsWith('Mixed colors'))) {
-    throw new Error('Some stickers are too dark or reflective to read. Retake the whole face in even light.');
+  const unreadable = result.predictions.flatMap((prediction, index) => prediction.readable ? [] : [index + 1]);
+  if (unreadable.length) {
+    throw new Error(`Not enough reliable color in sticker${unreadable.length === 1 ? '' : 's'} ${unreadable.join(', ')} (read left to right, top to bottom). Reduce glare or add diffuse light; manual entry can correct worn stickers.`);
   }
   return {
     center: center.color,
@@ -114,7 +114,16 @@ export function assemblePhotos(photos: readonly CapturedFace[]): PhotoAssembly {
   const matched = captures.map((photo) => photo.samples.map((sample) => classifyWithCenters(sample, calibration)));
   const unclear = FACES.filter((_, i) => matched[i].some((prediction) => !prediction.color || prediction.confidence < 0.45 || prediction.reason));
   if (unclear.length) {
-    return { ok: false, problem: { code: 'unclear', message: `Some colors are hard to distinguish in ${unclear.map((face) => FACE_NAMES[face]).join(', ')}. Retake those faces in even light.`, faces: unclear } };
+    return {
+      ok: false, problem: {
+        code: 'unclear',
+        message: `Some colors are hard to distinguish in ${unclear.map((face) => FACE_NAMES[face]).join(', ')}. Retake those faces in neutral, diffuse light, or use manual color review.`,
+        faces: unclear,
+        details: matched.flatMap((predictions, face) => predictions.flatMap((prediction, index) =>
+          !prediction.color || prediction.confidence < 0.45 || prediction.reason
+            ? [`${FACE_NAMES[FACES[face]]}, sticker ${index + 1} (left to right, top to bottom): ${prediction.reason ?? 'Not enough color separation for a reliable match.'}`] : [])),
+      },
+    };
   }
   const faces = matched.map((predictions) => predictions.map((prediction) => {
     if (!isColor(prediction.color)) throw new Error('A checked photo unexpectedly contains an unknown color.');

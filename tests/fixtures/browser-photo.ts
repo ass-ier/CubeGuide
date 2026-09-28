@@ -1,24 +1,28 @@
 import type { Page } from '@playwright/test';
 import type { Color } from '../../src/cube/types';
-import { fixturePhoto, type PhotoRegion } from './photo';
+import { degradedPhoto, fixturePhoto, type PhotoRegion } from './photo';
 
 export async function automaticPhotoFile(
   page: Page,
   colors: readonly Color[],
   region: Partial<Omit<PhotoRegion, 'colors'>> = {},
-  options: { mime?: 'image/png' | 'image/jpeg' | 'image/webp'; blank?: boolean; exif?: number } = {},
+  options: {
+    mime?: 'image/png' | 'image/jpeg' | 'image/webp'; blank?: boolean; exif?: number;
+    degradation?: Parameters<typeof degradedPhoto>[1]; quality?: number;
+  } = {},
 ) {
-  const pixels = fixturePhoto(options.blank ? [] : [{ x: 100, y: 65, size: 300, ...region, colors }]);
+  const raster = fixturePhoto(options.blank ? [] : [{ x: 100, y: 65, size: 300, ...region, colors }]);
+  const pixels = options.degradation ? degradedPhoto(raster, options.degradation) : raster;
   const mimeType = options.mime ?? 'image/png';
-  const base64 = await page.evaluate(({ data, width, height, mime }) => {
+  const base64 = await page.evaluate(({ data, width, height, mime, quality }) => {
     const bytes = Uint8ClampedArray.from(atob(data), (character) => character.charCodeAt(0));
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Could not create the test photograph.');
     context.putImageData(new ImageData(bytes, width, height), 0, 0);
-    return canvas.toDataURL(mime, 0.96).split(',')[1];
-  }, { data: Buffer.from(pixels.data).toString('base64'), width: pixels.width, height: pixels.height, mime: mimeType });
+    return canvas.toDataURL(mime, quality).split(',')[1];
+  }, { data: Buffer.from(pixels.data).toString('base64'), width: pixels.width, height: pixels.height, mime: mimeType, quality: options.quality ?? 0.96 });
   let buffer = Buffer.from(base64, 'base64');
   if (options.exif) {
     if (mimeType !== 'image/jpeg') throw new Error('EXIF fixture metadata needs a JPEG.');

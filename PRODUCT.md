@@ -40,6 +40,10 @@ unambiguous even when the virtual camera is rotated.
 - Bad or uncertain captures receive actionable retake messages. Cancelled
   or failed replacements preserve accepted images. Reset/mode changes and
   removal of a solution use explicit confirmation and stale-work guards.
+- Photo reading tolerates dimmer exposure, moderate fading, thin scratches,
+  and center printing when intact color remains observable across a sticker.
+  Missing pigment, severe darkness, glare, and conflicting color evidence
+  still require a retake or manual correction, not a forced reconstruction.
 - Native camera-hint/file input, plus optional manual centers, sticker grids,
   four-corner photo alignment, color review, and guarded per-face merging.
 - No app accounts, backend, server photo uploads, analytics, or cloud vision.

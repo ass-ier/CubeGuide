@@ -294,7 +294,8 @@ export function AutomaticPhotoInput(props: Props) {
       <details className="auto-photo-tips">
         <summary>Tips for a clear photo</summary>
         <p>Show one whole face with all nine stickers and visible gaps. Leave a little space around it. Use even light, avoid flash glare, and keep the top edge shown above upright. Do not turn individual layers between photos.</p>
-        <p>For standard six-color 3x3 cubes. Unclear or ambiguous photos need a retake; we never fill in hidden stickers. Manual entry also includes optional alignment and color-review tools.</p>
+        <p>Faded colors, small scratches, and center logos can be read when enough original color remains visible. In low light, hold the camera steady and add diffuse light if asked to retake. Hidden, fully washed-out, or glare-covered colors cannot be recovered.</p>
+        <p>For standard six-color 3x3 cubes. If a face still will not read, choose Enter colors manually for optional photo alignment and editable color review. We never fill in unseen stickers.</p>
       </details>
       <div className="automatic-alternatives">
         <button className="text-button" onClick={props.onManual}>Enter colors manually</button>

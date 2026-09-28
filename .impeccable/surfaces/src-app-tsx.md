@@ -33,6 +33,9 @@ center sampling, calibrated color matching, and physical validation in a
 cancellable worker. The user supplies six labeled faces. Ambiguity produces
 a retake, not an arbitrary valid reconstruction. Optional alignment/review
 still exists, but is never the automatic happy path.
+Worn/low-light photo handling preserves this flow. Tips and retake messages
+explain when intact color can be read and when light, alignment, or manual
+correction is necessary; they do not imply that erased pigment is recoverable.
 
 Signature interaction: pause halfway through a turn, inspect it, and reverse
 only that unfinished portion without logical/visual drift.

@@ -58,48 +58,65 @@ function fourCorners(points: readonly Point[]): Quad | null {
   return [polygon[start], polygon[(start + 1) % 4], polygon[(start + 2) % 4], polygon[(start + 3) % 4]];
 }
 
-function diagonalCenter(quad: Quad): Point {
-  const [a, b, c, d] = quad;
-  const rx = c.x - a.x, ry = c.y - a.y, sx = d.x - b.x, sy = d.y - b.y;
-  const t = ((b.x - a.x) * sy - (b.y - a.y) * sx) / (rx * sy - ry * sx);
-  return { x: a.x + t * rx, y: a.y + t * ry };
+function polygonCenter(polygon: readonly Point[]): Point {
+  let x = 0, y = 0, weight = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % polygon.length], product = a.x * b.y - b.x * a.y;
+    x += (a.x + b.x) * product; y += (a.y + b.y) * product; weight += product;
+  }
+  return { x: x / (3 * weight), y: y / (3 * weight) };
 }
 
-function components(image: Pixels): { candidates: Component[]; width: number; height: number } {
+function medianFilter(pixels: Uint8ClampedArray, width: number, height: number, radius: number): Uint8ClampedArray {
+  const horizontal = new Uint8ClampedArray(pixels.length), result = new Uint8ClampedArray(pixels.length);
+  const values = Array<number>(radius * 2 + 1).fill(0);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    for (let channel = 0; channel < 3; channel++) {
+      for (let d = -radius; d <= radius; d++) values[d + radius] = pixels[(y * width + Math.max(0, Math.min(width - 1, x + d))) * 3 + channel];
+      horizontal[(y * width + x) * 3 + channel] = values.sort((a, b) => a - b)[radius];
+    }
+  }
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    for (let channel = 0; channel < 3; channel++) {
+      for (let d = -radius; d <= radius; d++) values[d + radius] = horizontal[(Math.max(0, Math.min(height - 1, y + d)) * width + x) * 3 + channel];
+      result[(y * width + x) * 3 + channel] = values.sort((a, b) => a - b)[radius];
+    }
+  }
+  return result;
+}
+
+function components(image: Pixels, radius: number): { candidates: Component[]; width: number; height: number } {
   const scale = Math.min(1, MAX_SIDE / Math.max(image.width, image.height));
   const width = Math.round(image.width * scale), height = Math.round(image.height * scale);
   const mask = new Uint8Array(width * height), visited = new Uint8Array(mask.length);
   const pixels = new Uint8ClampedArray(mask.length * 3);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const sx = Math.min(image.width - 1, Math.floor((x + 0.5) * image.width / width));
-    const sy = Math.min(image.height - 1, Math.floor((y + 0.5) * image.height / height));
-    const index = (sy * image.width + sx) * 4, alpha = image.data[index + 3] / 255;
-    const r = image.data[index] * alpha, g = image.data[index + 1] * alpha, b = image.data[index + 2] * alpha;
-    const high = Math.max(r, g, b), low = Math.min(r, g, b);
-    mask[y * width + x] = high > 55 && ((high - low) / high > 0.2 || low > 85) ? 1 : 0;
-    pixels.set([r, g, b], (y * width + x) * 3);
-  }
-  // Smoothed contrast boundaries separate stickers even when the cube body is light.
-  const smooth = new Uint8ClampedArray(pixels.length);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     let r = 0, g = 0, b = 0, count = 0;
-    for (let dy = Math.max(0, y - 1); dy <= Math.min(height - 1, y + 1); dy++) {
-      for (let dx = Math.max(0, x - 1); dx <= Math.min(width - 1, x + 1); dx++) {
-        const offset = (dy * width + dx) * 3;
-        r += pixels[offset]; g += pixels[offset + 1]; b += pixels[offset + 2]; count++;
+    for (let sy = Math.floor(y * image.height / height); sy < Math.floor((y + 1) * image.height / height); sy++) {
+      for (let sx = Math.floor(x * image.width / width); sx < Math.floor((x + 1) * image.width / width); sx++) {
+        const index = (sy * image.width + sx) * 4, alpha = image.data[index + 3] / 255;
+        r += image.data[index] * alpha; g += image.data[index + 1] * alpha; b += image.data[index + 2] * alpha; count++;
       }
     }
-    smooth.set([r / count, g / count, b / count], (y * width + x) * 3);
+    pixels.set([r / count, g / count, b / count], (y * width + x) * 3);
   }
-  const difference = (a: number, b: number) => {
+  // Remove thin scratches and sensor noise without blurring across the sticker seams.
+  const smooth = medianFilter(pixels, width, height, radius);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const offset = (y * width + x) * 3;
+    mask[y * width + x] = Math.max(smooth[offset], smooth[offset + 1], smooth[offset + 2]) > 12 ? 1 : 0;
+  }
+  const boundary = (a: number, b: number) => {
     const first = a * 3, second = b * 3;
-    return (smooth[first] - smooth[second]) ** 2
+    const difference = (smooth[first] - smooth[second]) ** 2
       + (smooth[first + 1] - smooth[second + 1]) ** 2
       + (smooth[first + 2] - smooth[second + 2]) ** 2;
+    const peak = Math.max(smooth[first], smooth[first + 1], smooth[first + 2], smooth[second], smooth[second + 1], smooth[second + 2]);
+    return difference > (3 + peak * 0.075) ** 2;
   };
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    if (difference(y * width + Math.max(0, x - 2), y * width + Math.min(width - 1, x + 2)) > 18 ** 2
-      || difference(Math.max(0, y - 2) * width + x, Math.min(height - 1, y + 2) * width + x) > 18 ** 2) {
+    if (boundary(y * width + Math.max(0, x - 2), y * width + Math.min(width - 1, x + 2))
+      || boundary(Math.max(0, y - 2) * width + x, Math.min(height - 1, y + 2) * width + x)) {
       mask[y * width + x] = 0;
     }
   }
@@ -127,10 +144,10 @@ function components(image: Pixels): { candidates: Component[]; width: number; he
         || !mask[index - 1] || !mask[index + 1] || !mask[index - width] || !mask[index + width]) boundary.push({ x, y });
     }
     const polygon = hull(boundary), polygonArea = area(polygon), quad = fourCorners(polygon);
-    if (!quad || polygonArea < 16 || tail / polygonArea < 0.7 || area(quad) / polygonArea < 0.78) continue;
+    if (!quad || polygonArea < 16 || tail / polygonArea < 0.5 || area(quad) / polygonArea < 0.7) continue;
     const sides = quad.map((point, i) => distance(point, quad[(i + 1) % 4]));
     if (Math.min(...sides) / Math.max(...sides) < 0.3) continue;
-    const center = diagonalCenter(quad);
+    const center = polygonCenter(polygon);
     if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) continue;
     candidates.push({ id: candidates.length, center, area: polygonArea });
     if (candidates.length > MAX_COMPONENTS) {
@@ -165,6 +182,13 @@ function fitGrid(group: readonly Component[], anchor: Component): Grid | null {
       if (d < delta) { delta = d; nearest = component; }
     }
     if (!nearest || used.has(nearest.id) || delta > pitch * 0.14 || i === 4 && nearest.id !== anchor.id) return null;
+    const col = i % 3, row = Math.floor(i / 3);
+    const cellArea = area([
+      map((col - 0.5) / 2, (row - 0.5) / 2), map((col + 0.5) / 2, (row - 0.5) / 2),
+      map((col + 0.5) / 2, (row + 0.5) / 2), map((col - 0.5) / 2, (row + 0.5) / 2),
+    ]);
+    // A scratch fragment must not become a whole sticker by pulling the inferred crop toward it.
+    if (nearest.area / cellArea < 0.4 || nearest.area / cellArea > 1.1) return null;
     used.add(nearest.id); squaredError += delta * delta;
   }
   const error = Math.sqrt(squaredError / 9) / pitch;
@@ -174,12 +198,7 @@ function fitGrid(group: readonly Component[], anchor: Component): Grid | null {
   return { quad: face, center: points[4], ids: [...used], pitch, error };
 }
 
-export function locateFace(image: Pixels): LocatedFace {
-  if (!Number.isInteger(image.width) || !Number.isInteger(image.height) || image.width < 32 || image.height < 32
-    || image.width > 1024 || image.height > 1024 || image.data.length !== image.width * image.height * 4) {
-    throw new Error('Use a readable photo with a complete face. The working image must be a complete 32-1024 pixel raster.');
-  }
-  const { candidates, width, height } = components(image);
+function findGrids(candidates: readonly Component[]): Grid[] {
   const grids: Grid[] = [];
   for (const center of candidates) {
     const nearby = candidates.filter((candidate) => candidate.id !== center.id
@@ -201,7 +220,28 @@ export function locateFace(image: Pixels): LocatedFace {
     };
     choose(0, []);
   }
-  if (!grids.length) throw new Error('Could not find all nine stickers clearly. Retake one complete face, straight on, with visible gaps and even light.');
+  return grids;
+}
+
+export function locateFace(image: Pixels): LocatedFace {
+  if (!Number.isInteger(image.width) || !Number.isInteger(image.height) || image.width < 32 || image.height < 32
+    || image.width > 1024 || image.height > 1024 || image.data.length !== image.width * image.height * 4) {
+    throw new Error('Use a readable photo with a complete face. The working image must be a complete 32-1024 pixel raster.');
+  }
+  let detected = components(image, 1);
+  const grids = findGrids(detected.candidates).map((grid) => ({ ...grid, componentCount: detected.candidates.length }));
+  for (const radius of [3, 5]) {
+    if (grids.length > 1) break;
+    detected = components(image, radius);
+    for (const grid of findGrids(detected.candidates)) {
+      const previous = grids.findIndex((other) => distance(other.center, grid.center) < Math.min(other.pitch, grid.pitch) * 0.2
+        && Math.abs(other.pitch - grid.pitch) < Math.min(other.pitch, grid.pitch) * 0.2);
+      if (previous < 0) grids.push({ ...grid, componentCount: detected.candidates.length });
+      else if (grid.error < grids[previous].error) grids[previous] = { ...grid, componentCount: detected.candidates.length };
+    }
+  }
+  const { width, height } = detected;
+  if (!grids.length) throw new Error('Could not find all nine stickers clearly. Keep one whole face in focus, with visible gaps. Move closer or add diffuse light; manual entry also offers photo alignment.');
   if (grids.length > 1) throw new Error('More than one face or grid is visible. Retake just the named face, straight on.');
   const grid = grids[0];
   const scalePoint = (point: Point): Point => ({
@@ -215,7 +255,7 @@ export function locateFace(image: Pixels): LocatedFace {
   const clamp = (point: Point): Point => ({ x: Math.max(0, Math.min(image.width - 1, point.x)), y: Math.max(0, Math.min(image.height - 1, point.y)) });
   const quad: Quad = [clamp(raw[0]), clamp(raw[1]), clamp(raw[2]), clamp(raw[3])];
   if (cropError(quad, image.width, image.height)) throw new Error('The face is too small or too tilted to read reliably. Retake it closer and straight on.');
-  return { quad, confidence: Math.max(0, 1 - grid.error / 0.14), componentCount: candidates.length };
+  return { quad, confidence: Math.max(0, 1 - grid.error / 0.14), componentCount: grid.componentCount };
 }
 
 export function faceThumbnail(image: Pixels, quad: Quad, side = 168): Pixels {

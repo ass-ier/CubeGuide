@@ -172,6 +172,15 @@ happy path. Retakes are still necessary when the image does not support a
 confident reading. The app does not invent unseen stickers or force detected
 colors to satisfy nine-of-each counts.
 
+Dim photos, moderate fading, thin scratches, and printed center logos can be
+read when enough intact pigment and clear boundaries remain. The detector uses
+relative contrast rather than a fixed bright-sticker cutoff, and samples
+intact areas across each sticker instead of relying on its middle alone.
+Keep the camera steady in low light. If a color is erased, covered, clipped by
+glare, or too close to another color, add neutral diffuse light or use the
+manual route's alignment and editable review. Processing cannot restore
+information that is absent from the photo.
+
 JPEG, PNG, and WebP still images are supported, up to **16 MiB**, **24 million
 source pixels**, and **8192 pixels on either edge**. Convert HEIC/HEIF first.
 SVG, GIF, and animated PNG/WebP are rejected. Headers and bounds are checked
@@ -200,11 +209,11 @@ model or a cloud recognition service.
 | --- | --- |
 | File gate | Check MIME/signature, byte size, dimensions, and supported still-image format before allocating the main decoded pixel buffer. Oversized or corrupt files produce a visible error, not a guessed face. |
 | Decode | Use `createImageBitmap` with EXIF orientation support, with a native image fallback. Downsample while preserving aspect ratio; keep at most a 1024-by-1024 working raster. |
-| Locate | Scan the whole image at a bounded 480-pixel working scale. Color/brightness segmentation and smoothed contrast boundaries produce connected components, including on dark, gray, or light cube bodies. Reject non-sticker shapes and excessive clutter. This is real localization, not a default central crop. |
-| Fit | Search candidate components for nine centers in a projective 3x3 grid. Fit a homography, measure positional error, and extrapolate the outer face corners from the corner-sticker centers. Reject missing, multiple, clipped, tiny, or strongly distorted grids. |
-| Sample | Collect an interior 9-by-9 sample patch for each sticker. Per-channel medians reduce the influence of black borders, noise, and small reflections. |
+| Locate | Area-downsample the whole image to a bounded 480-pixel working scale. Three bounded median-filter scales remove noise and thin scratches while exposure-relative contrast boundaries separate dark, gray, or light cube bodies. Retain plausible rounded sticker contours, including hollow contours around center printing. This is real localization, not a default central crop. |
+| Fit | Search contour centroids for nine centers in a projective 3x3 grid. Check positional error and each contour's area relative to its projected cell, so a scratch fragment cannot pull the crop toward itself. Compare detections across filter scales; reject multiple, missing, clipped, tiny, or strongly distorted grids. |
+| Sample | Collect a 15-by-15 grid across the inner 70% of each sticker. Find a coherent pigment/neutral cluster, require support across the cell (including all four corner regions), and take trimmed RGB means. Sparse scratches, dark logos, and small reflections are outliers; competing colors, insufficient coverage, deep darkness, or extensive glare remain unreadable. |
 | Identify centers | Match the six middle stickers to plausible named standard colors. Reject uncertain, repeated, or insufficiently separated centers. Do not force a one-to-one assignment simply because six photos were supplied. |
-| Calibrate | Normalize exposure, convert sRGB to D65 CIELAB, and reclassify all 54 samples against the six actual center samples. Reject unclear/distant matches; this is not invariant to colored lighting or glare. |
+| Calibrate | Reclassify all 54 samples against the six actual centers using hue, which tolerates exposure changes and neutral fading better than saturation-sensitive RGB/Lab matching. Preserve a minimum color signal, a white-versus-faded uncertainty band, hue-distance/margin checks, and an exposure-normalized D65 CIELAB center-separation check. This cannot correct arbitrary colored lighting or glare. |
 | Orient | Use the named face and displayed top-edge convention. If piece identities disagree, try the bounded set of in-plane quarter turns and accept recovery only when it yields one distinct physically valid cube. Multiple interpretations require a retake. |
 | Validate | Use the existing physical validator for colors, centers, pieces, orientations, and parity. Count, edge-flip, corner-twist, and parity failures are not silently “repaired” into a different cube. |
 | Solve | Supply the complete photo capture through the normal input boundary, then run the established solver and independent replay. Only a verified result becomes a solution; playback stays deliberate. |
@@ -523,6 +532,12 @@ light/gray/dark bodies, incomplete/multiple/cluttered grids, center-only
 calibration, unique versus ambiguous orientation recovery, worker response
 guards, review/fixed-center fallback, unsupported/oversized/animated inputs,
 and six-photo reconstruction with standard and alternate center schemes.
+Worn-photo regressions additionally exercise reduced exposure with sensor
+noise, uneven shadows, rounded/narrow-gap stickers, independently faded
+stickers, crossing scratches, center printing, and combinations of those
+conditions. They assert the actual nine/54 colors and inferred face corners,
+not merely that processing completes. Missing pigment, competing colors,
+occlusion, extreme darkness, and heavy glare must still be rejected.
 
 Each full unit run performs **160 real solver cases**: 120 deterministic
 25-40-move scrambles entered through color mapping, 24 fresh cryptographically
@@ -540,14 +555,21 @@ centers, cropping, reviewing, or pressing an extra solve button. It verifies
 the derived 54 colors and original cube, replays every returned snapshot,
 and exercises actual layer motion through pause/resume to matching solved
 meshes. The first upload action is also checked at 320 pixels.
+Separate desktop/mobile cases encode degraded captures as real JPEG/WebP
+files, including compression, dim exposure, fading, scratches, shadows, and
+logos. They require the exact original cube and all solution snapshots, then
+animate to matching solved logical and mesh facelets.
 
 Other cases cover ambiguous/duplicate/uncertain input, failed replacements,
 picker/processing cancellation, worker loading failure and retry, reset races,
 manual fallback, and preview cleanup. The separate assisted-photo regression
 still moves crop handles, corrects estimates, checks fixed-center/overwrite
 guards, solves its real entered cube, and verifies rendered motion.
-Fixtures include image noise and exposure gradients; they are not evidence
-of camera-hardware or uncontrolled real-world accuracy.
+These are generated pixel fixtures, not a field accuracy benchmark.
+No failing user photograph was supplied for the worn-sticker refinement;
+its exact camera/lighting case has not been reproduced. Physical devices,
+uncontrolled colored lighting, and completely erased colors are not certified
+by these tests.
 Assertions inspect actual sticker meshes and their transforms, not just
 success text. The visibility interruption test explicitly simulates the
 Page Visibility event; mobile gestures run in touch-enabled Chromium.
@@ -562,7 +584,7 @@ To smoke-test the built worker and assets, run `npm run preview` in another
 terminal after building, then:
 
 ```sh
-CUBE_GUIDE_BASE_URL=http://127.0.0.1:4187 npm run test:e2e -- --grep 'six photos alone|random scramble ->|six real raster uploads'
+CUBE_GUIDE_BASE_URL=http://127.0.0.1:4187 npm run test:e2e -- --grep 'six photos alone|dim, faded|random scramble ->|six real raster uploads'
 ```
 
 For a focused landing-path check:
@@ -582,9 +604,10 @@ Test organization:
 | `playback.test.ts`, `cue.test.ts` | Reducer transitions, interruptions, snapshots, speeds, and physically correct arrows. |
 | `photo.test.ts` | Sampling, perspective, orientation, lighting variations, file guards, review, and provider isolation. |
 | `automatic-photo.test.ts` | Actual grid localization, detected center schemes, calibrated reconstruction, orientation ambiguity, and impossible captures. |
+| `photo-robustness.test.ts` | Dim/faded/scratched/printed-sticker recognition, exact degraded-photo reconstruction, and conservative rejection of missing/conflicting pixel evidence. |
 | `photo-worker.test.ts` | Pixel-buffer transfer, malformed responses, stale requests, independent validation, cancellation, and timeout. |
 | `app.spec.ts` | Actual browser workers, all controls, signed 3D turns, manual entry, camera, mobile, and reduced motion. |
-| `automatic-photo.spec.ts` | Upload-only desktop/mobile solving, real EXIF/perspective images, unsafe-input refusal, retention/focus, and solved mesh/model equality. |
+| `automatic-photo.spec.ts` | Upload-only desktop/mobile solving, real EXIF/perspective and degraded JPEG/WebP images, unsafe-input refusal, retention/focus, and solved mesh/model equality. |
 | `photo.spec.ts` | Secondary alignment/review, actual raster uploads, privacy/resource guards, and solved mesh/model equality. |
 
 Browser installation is a one-time environment step, not an app dependency

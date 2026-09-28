@@ -6,7 +6,7 @@ import { FACE_NAMES, FACES, PRACTICE_SCHEME, type Color, type ColorScheme, type 
 import { ENTRY_ORDER } from '../../src/input/orientation';
 import { rotateFace } from '../../src/input/photo/automatic';
 import { automaticPhotoFile } from '../fixtures/browser-photo';
-import { PIGMENTS, type PhotoRegion } from '../fixtures/photo';
+import { PIGMENTS, WORN_SURFACES, type PhotoRegion } from '../fixtures/photo';
 
 const SOLVED = cubeKey(solvedCube());
 const errors = new Map<Page, string[]>();
@@ -170,6 +170,56 @@ for (const device of [
       await expect(page.getByText('Solution ready', { exact: true })).toBeVisible({ timeout: 45_000 });
       expect((await inspect(page)).initialFacelets).toBe(cubeKey(original));
     });
+
+    test('dim, faded and scratched photos reconstruct exact colors and animate the real cube to solved', async ({ page }, testInfo) => {
+      const photographed = applyAlgorithm(solvedCube(), parseAlgorithm("R U2 B' D L2 F R' D2 B U' F2"));
+      const colors = toColors(photographed, device.scheme);
+      const elapsed: number[] = [];
+      for (let index = 0; index < ENTRY_ORDER.length; index++) {
+        const face = ENTRY_ORDER[index], base = FACES.indexOf(face) * 9;
+        const file = await automaticPhotoFile(page, colors.slice(base, base + 9), {
+          ...WORN_SURFACES[index % WORN_SURFACES.length],
+          x: 130 + index * 8, y: index % 2 ? 135 : 48, size: 330,
+          angle: index % 2 ? -9 : 17, perspectiveX: 0.16, perspectiveY: 0.07,
+        }, {
+          mime: index % 2 ? 'image/jpeg' : 'image/webp', quality: 0.86,
+          degradation: { exposure: index % 2 ? 0.28 : 0.65, noise: 1.5, blur: 1, cast: [1.02, 1, 0.98] },
+        });
+        const started = Date.now();
+        await page.getByTestId('automatic-photo-file').setInputFiles(file);
+        await added(page, face);
+        elapsed.push(Date.now() - started);
+        if (index < 5) await expect(page.getByTestId('landing-photo-action')).toBeEnabled();
+      }
+      await expect(page.getByText('Solution ready', { exact: true })).toBeVisible({ timeout: 45_000 });
+      await exactMeshes(page, cubeKey(photographed));
+      const ready = await inspect(page);
+      expect(ready.entry).toEqual(colors);
+      expect(ready.initialFacelets).toBe(cubeKey(photographed));
+      expect(ready.verified).toBe(true);
+      expect(ready.running).toBe(false);
+      let replay = photographed;
+      for (const [index, move] of parseAlgorithm(ready.solutionMoves).entries()) {
+        replay = applyMove(replay, move);
+        expect(ready.snapshots[index + 1]).toBe(cubeKey(replay));
+      }
+      expect(cubeKey(replay)).toBe(SOLVED);
+      await page.getByLabel('Animation speed').selectOption('2');
+      await page.getByRole('button', { name: 'Play solution', exact: true }).click();
+      await page.waitForFunction(() => {
+        const state = window.__cubeGuide.inspect();
+        return (state.transition?.progress ?? 0) > 0.1 && state.visual?.movingCubelets === 9 && !state.visual.aligned;
+      });
+      await page.waitForFunction(() => {
+        const state = window.__cubeGuide.inspect();
+        return state.solved && !state.transition && !state.running && state.step === state.solutionLength;
+      }, null, { timeout: 45_000 });
+      await exactMeshes(page, SOLVED);
+      await testInfo.attach('worn-photo-reconstruction', {
+        body: JSON.stringify({ scheme: device.scheme, uploadMilliseconds: elapsed, expected: colors, ready, final: await inspect(page) }),
+        contentType: 'application/json',
+      });
+    });
   });
 }
 
@@ -197,6 +247,8 @@ test('corrupt, blank, duplicate and uncertain-center replacements preserve accep
     { file: await automaticPhotoFile(page, Array<Color>(9).fill('red'), {}, { blank: true }), error: /nine stickers/i },
     { file: await automaticPhotoFile(page, Array<Color>(9).fill('red')), error: /both have red centers/i },
     { file: await automaticPhotoFile(page, Array<Color>(9).fill('red'), { samples: uncertain }), error: /center color is not clear/i },
+    { file: await automaticPhotoFile(page, Array<Color>(9).fill('green'), {}, { degradation: { exposure: 0.04, noise: 2 } }), error: /nine stickers|center color|reliable color/i },
+    { file: await automaticPhotoFile(page, Array<Color>(9).fill('white'), { light: 1.6 }), error: /center color is not clear/i },
   ];
   for (const attempt of attempts) {
     await page.getByTestId('automatic-photo-file').setInputFiles(attempt.file);

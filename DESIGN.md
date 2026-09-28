@@ -182,6 +182,10 @@ names. Focus advances to the next upload action, moves to an actionable error
 when needed, and reaches the verified solution without starting playback.
 Busy processing is cancellable. Failed/cancelled replacement preserves the
 prior thumbnail; destructive resets and source changes remain confirmed.
+Collapsed photo tips explain low-light and worn-sticker recovery without
+promising universal recognition. Unreadable-color errors name sticker
+positions when identifiable and retain the existing manual alignment/review
+escape hatch. Robustness does not add a setup step or another primary action.
 
 The secondary alignment editor keeps its four numbered handles, perspective
 grid, named color corrections, and required review. Its targets become 44px

@@ -113,7 +113,9 @@ describe('automatic center mapping, calibration and physical assembly', () => {
     const samples: RGB[] = [...photos[0].samples];
     samples[0] = [12, 10, 10];
     photos[0] = { ...photos[0], samples };
-    expect(assemblePhotos(photos)).toMatchObject({ ok: false, problem: { code: 'unclear', faces: ['U'] } });
+    expect(assemblePhotos(photos)).toMatchObject({
+      ok: false, problem: { code: 'unclear', faces: ['U'], details: [expect.stringContaining('Up, sticker 1')] },
+    });
   });
   it('recovers a unique within-face quarter-turn interpretation using full physical validation', () => {
     const colors = toColors(original, PRACTICE_SCHEME), photos = captures(colors);
