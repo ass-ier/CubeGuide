@@ -186,6 +186,9 @@ Collapsed photo tips explain low-light and worn-sticker recovery without
 promising universal recognition. Unreadable-color errors name sticker
 positions when identifiable and retain the existing manual alignment/review
 escape hatch. Robustness does not add a setup step or another primary action.
+Production footers separately disclose Vercel visit analytics without
+weakening the promise that photos and cube data remain local. The provider's
+privacy link opens a new tab so it cannot discard the current cube session.
 
 The secondary alignment editor keeps its four numbered handles, perspective
 grid, named color corrections, and required review. Its targets become 44px

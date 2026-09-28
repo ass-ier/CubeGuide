@@ -36,6 +36,9 @@ still exists, but is never the automatic happy path.
 Worn/low-light photo handling preserves this flow. Tips and retake messages
 explain when intact color can be read and when light, alignment, or manual
 correction is necessary; they do not imply that erased pigment is recoverable.
+Live production pages disclose visitor analytics separately from on-device
+photo/cube processing; the provider privacy link must not navigate away from
+an in-progress cube.
 
 Signature interaction: pause halfway through a turn, inspect it, and reverse
 only that unfinished portion without logical/visual drift.

@@ -83,7 +83,7 @@ export const FaceInput = memo(function FaceInput(props: Props) {
           {photoOpen ? 'Lock centers & open photos' : 'Lock centers & enter stickers'} <Icon name="arrow" />
         </button>
         {photoOpen && <button className="text-button manual-setup-action" onClick={props.onManualEntry}>Use manual entry instead</button>}
-        <p className="small muted privacy-note">{photoOpen ? 'Next: take or upload one face at a time. Nothing leaves your device.' : 'Manual entry uses fixed centers. For automatic color detection instead, choose Use automatic photos above.'}</p>
+        <p className="small muted privacy-note">{photoOpen ? 'Next: take or upload one face at a time. Photos stay on your device.' : 'Manual entry uses fixed centers. For automatic color detection instead, choose Use automatic photos above.'}</p>
       </section>
     );
   }

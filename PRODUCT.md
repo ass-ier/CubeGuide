@@ -46,8 +46,11 @@ unambiguous even when the virtual camera is rotated.
   still require a retake or manual correction, not a forced reconstruction.
 - Native camera-hint/file input, plus optional manual centers, sticker grids,
   four-corner photo alignment, color review, and guarded per-face merging.
-- No app accounts, backend, server photo uploads, analytics, or cloud vision.
-  Authorized source publication/static hosting does not change local processing.
+- No app accounts, cube-processing backend, server photo uploads, or cloud vision.
+  Photos, sticker colors, and solutions remain on the device.
+- Vercel Web Analytics counts visits/page views on production Vercel builds
+  only. No custom cube/photo events; page URL queries and fragments are removed.
+  Local development and preview deployments do not collect analytics.
 - Real two-phase solving in a Web Worker, independent replay verification,
   immutable step snapshots, and impossibility diagnostics.
 - An interactive 27-cubelet view with real pausable layer rotations.

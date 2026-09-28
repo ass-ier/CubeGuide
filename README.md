@@ -46,7 +46,7 @@ npm run preview
 
 The production preview is **http://127.0.0.1:4187/**. Serve `dist/` over HTTP;
 opening `index.html` directly with `file://` does not support the module worker.
-No backend, app account, or API key is required. Photo processing and solving
+No cube-processing backend, app account, or API key is required. Photo processing and solving
 stay in your browser. Use manual entry if you do not want to use photos.
 
 ### Commands
@@ -505,8 +505,19 @@ recognition model. There is no promised solve latency, frame rate, or camera
 accuracy for arbitrary hardware. The written guide and flat cube view remain
 useful when a graphics failure is explicitly reported.
 
-No backend receives the cube or photos, and no analytics or cloud-vision SDK
-is included. Local object URLs and decoded images are released on
+No backend receives the cube or photos, and no cloud-vision SDK is included.
+Production Vercel deployments use `@vercel/analytics` for aggregated page views
+and visitor statistics. Local development, ordinary local production previews,
+and Vercel preview deployments do not load the analytics collector. The app
+does not send photo files, filenames, sticker colors, cube states, solutions,
+or custom interaction events to analytics. Its `beforeSend` filter removes
+query strings and fragments from the tracked page URL and rejects custom events.
+Vercel's standard traffic metadata, such as referrer, browser/device, and
+approximate location, is separate from cube data; see its
+[privacy documentation](https://vercel.com/docs/analytics/privacy-policy).
+The live footer discloses this distinction.
+
+Local object URLs and decoded images are released on
 replacement, confirmed abandonment, reset, or unmount; pending operations
 are versioned/aborted. “Local processing” does not mean a service worker or
 offline installation is implemented: the browser must first load the static
@@ -606,6 +617,8 @@ Test organization:
 | `automatic-photo.test.ts` | Actual grid localization, detected center schemes, calibrated reconstruction, orientation ambiguity, and impossible captures. |
 | `photo-robustness.test.ts` | Dim/faded/scratched/printed-sticker recognition, exact degraded-photo reconstruction, and conservative rejection of missing/conflicting pixel evidence. |
 | `photo-worker.test.ts` | Pixel-buffer transfer, malformed responses, stale requests, independent validation, cancellation, and timeout. |
+| `analytics.test.ts` | Production-only collection, tracked URL redaction, and rejection of custom events. |
+| `analytics.spec.ts` | No local collector, actual production SDK injection/privacy callback, and photo entry when analytics is blocked. |
 | `app.spec.ts` | Actual browser workers, all controls, signed 3D turns, manual entry, camera, mobile, and reduced motion. |
 | `automatic-photo.spec.ts` | Upload-only desktop/mobile solving, real EXIF/perspective and degraded JPEG/WebP images, unsafe-input refusal, retention/focus, and solved mesh/model equality. |
 | `photo.spec.ts` | Secondary alignment/review, actual raster uploads, privacy/resource guards, and solved mesh/model equality. |
@@ -634,8 +647,8 @@ CI status badge, or automatic deployment attached to these local commands.
 | Tests and generated image fixtures | `tests/unit/`, `tests/e2e/`, `tests/fixtures/` |
 | Product/design context | `PRODUCT.md`, `DESIGN.md`, `.impeccable/` |
 
-Runtime dependencies: React 19.2, React DOM 19.2, Three.js 0.180, and cubejs
-1.3.2. Development tooling: TypeScript 5.9, Vite 6.4, Vitest 4.1, and
+Runtime dependencies: React 19.2, React DOM 19.2, Three.js 0.180, cubejs
+1.3.2, and Vercel Web Analytics 2.0.1. Development tooling: TypeScript 5.9, Vite 6.4, Vitest 4.1, and
 Playwright 1.56. Exact resolutions are recorded in `package-lock.json`.
 
 For local debugging, the read-only `window.__cubeGuide.inspect()` returns
@@ -699,7 +712,7 @@ For an authorized Vercel project after the source has been pushed to
 | Build command | `npm run build` |
 | Output directory | `dist` |
 | Build Node version | A supported LTS satisfying the package engines, such as Node 24 |
-| App environment variables | None required |
+| App environment variables | No secrets required; keep Vercel's automatic system environment variables exposed for analytics |
 
 There is no client-side path router or server API to rewrite. Hosting must
 serve the emitted JavaScript, CSS, and worker assets correctly. A static host
@@ -714,6 +727,42 @@ build readiness. `.vercel/`, `.env*`, generated output, dependencies, test
 traces, and local tool caches are excluded from Git. No application license,
 CI pipeline, paid service, custom domain, or hosting resource is invented by
 these instructions.
+
+### Enable Vercel Web Analytics
+
+The official `@vercel/analytics/react` component is mounted once in
+`src/main.tsx`. Collection is enabled only when Vite builds for production
+and `VITE_VERCEL_ENV=production`. Vercel supplies this variable automatically
+for its Vite framework preset when system environment variables are exposed;
+there is no analytics API key to put in the client.
+
+1. Open **Analytics** in the existing CubeGuide Vercel project and enable
+   Web Analytics if it is not already enabled. A **Get Started** screen asking
+   for the React package still needs the updated app to be deployed.
+2. Deploy the source containing the updated `package.json`, lockfile, and
+   application code to that same project. Enabling the dashboard alone does
+   not add the React integration to an older deployed build.
+3. Visit the production site, then check its Analytics dashboard after a short
+   delay (Vercel suggests checking after about 30 seconds). Browser content
+   blockers can prevent a visit from being recorded; they must not prevent
+   photo entry or solving.
+
+Local tests intentionally send no real visitor traffic. To exercise the
+production integration with a stubbed collector:
+
+```sh
+VITE_VERCEL_ENV=production npm run build
+npm run preview
+# In a second terminal:
+CUBE_GUIDE_BASE_URL=http://127.0.0.1:4187 CUBE_GUIDE_ANALYTICS_ENABLED=1 npm run test:e2e -- tests/e2e/analytics.spec.ts
+```
+
+These checks verify SDK loading and privacy filtering, not Vercel dashboard
+ingestion. Rebuild normally (`npm run build`, without the environment override)
+before running other local production scenarios; the normal local preview
+does not have Vercel's `/_vercel/insights/*` endpoints and does not load them.
+See the official [analytics quickstart](https://vercel.com/docs/analytics/quickstart)
+and [Vite environment guidance](https://vercel.com/docs/frameworks/frontend/vite#environment-variables).
 
 ## Deliberate limitations
 

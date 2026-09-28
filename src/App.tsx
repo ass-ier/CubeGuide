@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { analyticsEnabled } from './analytics';
 import { AutomaticPhotoInput } from './components/AutomaticPhotoInput';
 import { ColorMark } from './components/ColorMark';
 import { CubeNet } from './components/CubeNet';
@@ -505,7 +506,10 @@ export default function App() {
 
       <footer className={`site-footer ${showWorkspace ? '' : 'photo-footer'}`}>{showWorkspace
         ? <><span>A little guidance for the cube in your hands.</span><span>Manual or photo entry <span className="separator">·</span> On-device solving</span></>
-        : <span>Photos are processed on your device. Nothing is uploaded to a server.</span>}</footer>
+        : <span>Photos and cube data stay on your device.</span>}
+        {analyticsEnabled && <span>Visit counts by <a href="https://vercel.com/docs/analytics/privacy-policy" target="_blank" rel="noopener noreferrer"
+          aria-label="Vercel Web Analytics privacy information (opens in a new tab)">Vercel Web Analytics</a>.</span>}
+      </footer>
       <DiscardDialog change={pendingChange} onCancel={() => setPendingChange(null)} onConfirm={() => {
         const change = pendingChange;
         setPendingChange(null);
